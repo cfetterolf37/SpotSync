@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { Dimensions, Image, StyleSheet, View } from "react-native";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
-import { WeatherProvider } from "../contexts/WeatherContext";
+import { VenueProvider, useVenues } from "../contexts/VenueContext";
+import { WeatherProvider, useWeather } from "../contexts/WeatherContext";
+import { securityService } from "../lib/security";
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,33 +22,86 @@ function SplashScreen() {
 }
 
 function RootLayoutNav() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { loading: weatherLoading } = useWeather();
+  const { loading: venueLoading } = useVenues();
   const segments = useSegments();
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(true);
+  const [securityValidated, setSecurityValidated] = useState(false);
 
-  // Show splash for minimum 1 second (faster than 2 seconds)
+  // Validate security on app start
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 1000);
+    try {
+      securityService.validateEnvironment();
+      setSecurityValidated(true);
+      console.log('Security validation passed');
+    } catch (error) {
+      console.error('Security validation failed:', error);
+      // In production, you might want to show an error screen
+    }
+  }, []);
+
+  // Debug logging
+  console.log('RootLayoutNav - user:', !!user, 'authLoading:', authLoading, 'weatherLoading:', weatherLoading, 'venueLoading:', venueLoading, 'showSplash:', showSplash, 'securityValidated:', securityValidated);
+
+  // Show splash for minimum 1 second
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log('Splash timer completed');
+      setShowSplash(false);
+    }, 1000);
     return () => clearTimeout(timer);
   }, []);
 
   // Handle navigation when ready
   useEffect(() => {
-    if (loading || showSplash) return;
+    // Wait for auth to be ready, splash to finish, and security to be validated
+    if (authLoading || showSplash || !securityValidated) {
+      console.log('Still loading auth, showing splash, or security not validated');
+      return;
+    }
+
+    console.log('Navigation ready - user:', !!user, 'segments:', segments);
 
     const inAuthGroup = segments[0] === "(auth)";
     const inTabsGroup = segments[0] === "(tabs)";
 
     if (!user && !inAuthGroup) {
+      console.log('Navigating to sign-in');
       router.replace("/(auth)/sign-in");
     } else if (user && inAuthGroup) {
+      console.log('Navigating to tabs');
       router.replace("/(tabs)");
+    } else if (user && !inTabsGroup && !inAuthGroup) {
+      console.log('User signed in but not in tabs, navigating to tabs');
+      router.replace("/(tabs)");
+    } else {
+      console.log('Navigation state is correct, no action needed');
     }
-  }, [user, loading, segments, showSplash]);
+  }, [user, authLoading, segments, showSplash, securityValidated]);
 
-  // Show splash while loading or during minimum duration
-  if (loading || showSplash) {
+  // Add timeout to prevent infinite loading
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (authLoading || showSplash) {
+        console.log('Loading timeout - forcing navigation');
+        setShowSplash(false);
+        // Force navigation to a safe state
+        if (user) {
+          router.replace("/(tabs)");
+        } else {
+          router.replace("/(auth)/sign-in");
+        }
+      }
+    }, 5000); // 5 second timeout
+
+    return () => clearTimeout(timeout);
+  }, [authLoading, showSplash, user]);
+
+  // Show splash while auth is loading or during minimum duration
+  if (authLoading || showSplash || !securityValidated) {
+    console.log('Showing splash screen');
     return <SplashScreen />;
   }
 
@@ -75,7 +130,9 @@ export default function RootLayout() {
     <ErrorBoundary>
       <AuthProvider>
         <WeatherProvider>
-          <RootLayoutNav />
+          <VenueProvider>
+            <RootLayoutNav />
+          </VenueProvider>
         </WeatherProvider>
       </AuthProvider>
     </ErrorBoundary>

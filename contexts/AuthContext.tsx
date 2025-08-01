@@ -39,16 +39,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
 
+    console.log('AuthContext: Initializing...');
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('AuthContext: Initial session loaded', !!session);
       setSession(session);
       setUser(session?.user ?? null);
+      setLoading(false);
+    }).catch((error) => {
+      console.error('AuthContext: Error loading session', error);
       setLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('AuthContext: Auth state changed', event, !!session);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -80,6 +87,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signOut = async () => {
+    console.log('AuthContext: Signing out...');
     await supabase.auth.signOut();
   };
 

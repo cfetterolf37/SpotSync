@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import { securityService } from './security';
 import { LocationData } from './weather';
 
 class LocationService {
@@ -21,16 +22,31 @@ class LocationService {
         return null;
       }
 
-      const location = await Location.getCurrentPositionAsync({
+      // Add timeout to prevent hanging
+      const locationPromise = Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
         timeInterval: 10000,
         distanceInterval: 10,
       });
 
-      return {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Location timeout')), 15000);
+      });
+
+      const location = await Promise.race([locationPromise, timeoutPromise]);
+
+      // Validate coordinates
+      const coords = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       };
+
+      if (!securityService.validateCoordinates(coords.latitude, coords.longitude)) {
+        console.error('Invalid coordinates received:', coords);
+        return null;
+      }
+
+      return coords;
     } catch (error) {
       console.error('Error getting current location:', error);
       return null;
@@ -39,6 +55,12 @@ class LocationService {
 
   async getLocationName(latitude: number, longitude: number): Promise<string | null> {
     try {
+      // Validate coordinates before making API call
+      if (!securityService.validateCoordinates(latitude, longitude)) {
+        console.error('Invalid coordinates for reverse geocoding:', { latitude, longitude });
+        return null;
+      }
+
       const response = await Location.reverseGeocodeAsync({
         latitude,
         longitude,

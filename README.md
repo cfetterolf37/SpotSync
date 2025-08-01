@@ -107,9 +107,13 @@ SpotSync/
 
 ## 🚀 **Features**
 
+- **Venue Discovery**: Location-based venue search using Geoapify Places API
+- **Weather Integration**: Global weather display to help with venue decisions
+- **Modern UI**: Glassmorphism design with smooth animations and responsive layout
+- **Category Filtering**: Filter venues by restaurants, bars, cafes, entertainment, etc.
+- **Radius Search**: Adjustable search radius (0.5mi to 10mi)
+- **Real-time Updates**: Pull-to-refresh and background data updates
 - **Authentication**: Email/password and social login (Google, Apple, GitHub)
-- **Weather Integration**: Location-based weather from OpenWeatherMap
-- **Modern UI**: Gradient backgrounds, smooth animations, responsive design
 - **Type Safety**: Full TypeScript implementation
 - **Testing**: Jest setup with sample tests
 - **Performance**: Monitoring and optimization
@@ -130,6 +134,13 @@ SpotSync/
 - **Forms**: React Hook Form + Yup
 - **Type Safety**: TypeScript
 - **Performance**: Custom monitoring hooks
+
+## 📋 **Project Documentation**
+
+### **Planning & Design**
+- [App Plan & Architecture](./docs/React%20Native%20Venue%20Discovery%20App%20Development%20Prompt.pdf) - Comprehensive planning document for SpotSync
+- [Feature Roadmap](./docs/roadmap.md) - Planned features and development timeline
+- [Design System](./docs/design-system.md) - UI/UX guidelines and component specifications
 
 ## 🚀 **Quick Start**
 
@@ -191,6 +202,9 @@ EXPO_PUBLIC_APP_SCHEME=spotsync
 
 # Weather API
 EXPO_PUBLIC_OPENWEATHER_API_KEY=your_openweather_api_key
+
+# Venue Discovery API
+EXPO_PUBLIC_GEOAPIFY_API_KEY=your_geoapify_api_key
 ```
 
 ## 📚 **API Documentation**
@@ -206,6 +220,13 @@ EXPO_PUBLIC_OPENWEATHER_API_KEY=your_openweather_api_key
 - Temperature in Fahrenheit and Celsius
 - Humidity and wind speed
 - Weather condition icons
+
+### **Venue Discovery API**
+- Location-based venue search using Geoapify Places API
+- Category filtering (restaurants, bars, cafes, entertainment, etc.)
+- Radius-based search (0.5mi to 10mi)
+- Venue details including ratings, price ranges, and contact info
+- Distance calculation from user location
 
 ## 🧪 **Testing**
 
