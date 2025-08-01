@@ -153,6 +153,17 @@ class VenueService {
     const properties = feature.properties || {};
     const geometry = feature.geometry;
     
+    // Debug: Log the properties to see what we're getting
+    console.log('VenueService: Parsing venue properties:', {
+      name: properties.name,
+      rating: properties.rating,
+      price: properties.price,
+      price_range: properties.price_range,
+      stars: properties.stars,
+      price_level: properties.price_level,
+      allProperties: Object.keys(properties)
+    });
+    
     // Calculate distance from user
     const distance = this.calculateDistance(
       userLat, userLng,
@@ -168,13 +179,24 @@ class VenueService {
       primaryCategory = categoryArray.length > 0 ? categoryArray[0] : 'venue';
     }
 
+    // Try multiple possible rating fields
+    let rating = properties.rating || properties.stars || properties.rating_value;
+    
+    // Try multiple possible price range fields
+    let priceRange = properties.price || properties.price_range || properties.price_level;
+    
+    // Convert price level numbers to strings if needed
+    if (typeof priceRange === 'number') {
+      priceRange = priceRange.toString();
+    }
+
     return {
       id: properties.place_id || `venue-${Date.now()}`,
       name: properties.name || 'Unknown Venue',
       address: properties.formatted || properties.address_line1 || '',
       category: primaryCategory,
-      rating: properties.rating,
-      priceRange: properties.price,
+      rating: rating,
+      priceRange: priceRange,
       distance,
       coordinates: {
         latitude: geometry.coordinates[1],
