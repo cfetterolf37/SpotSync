@@ -104,6 +104,13 @@ export default function SignUpScreen() {
         />
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.formSection}>
+            <View style={styles.logoContainer}>
+              <Image 
+                source={require('../../assets/images/SpotSyncLogo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
             <View style={styles.header}>
               <Text style={styles.title}>Create Account</Text>
               <Text style={styles.subtitle}>Join us and start your journey</Text>
@@ -274,27 +281,37 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 30,
-    paddingBottom: 20,
-    justifyContent: 'flex-end',
+    paddingBottom: 40,
+    justifyContent: 'center',
   },
   formSection: {
     width: '100%',
   },
-  header: {
+  logoContainer: {
     alignItems: 'center',
     marginBottom: 15,
   },
+  logoImage: {
+    width: 120,
+    height: 120,
+    backgroundColor: 'transparent',
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   title: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 13,
     color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
+    lineHeight: 18,
   },
   formContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.75)',

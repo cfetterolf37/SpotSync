@@ -68,6 +68,13 @@ export default function ForgotPasswordScreen() {
           </TouchableOpacity>
 
           <View style={styles.formSection}>
+            <View style={styles.logoContainer}>
+              <Image 
+                source={require('../../assets/images/SpotSyncLogo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
             <View style={styles.header}>
               <Text style={styles.title}>Reset Password</Text>
               <Text style={styles.subtitle}>
@@ -148,7 +155,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 30,
     paddingBottom: 40,
     justifyContent: 'center',
   },
@@ -167,22 +174,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  logoImage: {
+    width: 120,
+    height: 120,
+    backgroundColor: 'transparent',
+  },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 16,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 13,
     color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 18,
     paddingHorizontal: 20,
   },
   formContainer: {

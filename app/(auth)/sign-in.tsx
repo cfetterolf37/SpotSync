@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 30,
     paddingBottom: 40,
     justifyContent: 'center',
   },
@@ -248,27 +248,29 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 15,
   },
   logoImage: {
     width: 120,
     height: 120,
+    backgroundColor: 'transparent',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 13,
     color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
+    lineHeight: 18,
   },
   formContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.75)',
