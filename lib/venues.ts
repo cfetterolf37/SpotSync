@@ -51,70 +51,98 @@ class VenueService {
   }
 
   async searchVenues(params: VenueSearchParams): Promise<Venue[]> {
-    try {
-      if (!this.apiKey) {
-        throw new Error('Geoapify API key not configured');
+    const maxRetries = 3;
+    let attempt = 0;
+
+    while (attempt < maxRetries) {
+      try {
+        if (!this.apiKey) {
+          throw new Error('Geoapify API key not configured');
+        }
+
+        // Check rate limiting
+        const rateLimitKey = `venues-${params.latitude}-${params.longitude}`;
+        if (!rateLimiter.canMakeRequest(rateLimitKey, 3, 60 * 1000)) { // 3 requests per minute
+          throw new Error('Rate limit exceeded. Please try again later.');
+        }
+
+        // Check cache first
+        const cacheKey = `venues-${params.latitude}-${params.longitude}-${params.radius}-${params.category || 'all'}`;
+        const cachedData = cacheService.get<Venue[]>(cacheKey);
+        if (cachedData) {
+          console.log('VenueService: Returning cached data');
+          return cachedData;
+        }
+
+        const { latitude, longitude, radius, category, limit = 20 } = params;
+        
+        // Convert miles to kilometers for the API call
+        const radiusInKm = radius * 1.60934;
+        
+        // Build the API URL with required categories parameter
+        let url = `${this.baseUrl}?filter=circle:${longitude},${latitude},${radiusInKm * 1000}&limit=${limit}&apiKey=${this.apiKey}`;
+        
+        // Add category filter if specified, otherwise use all categories
+        if (category && category.trim() !== '') {
+          url += `&categories=${category}`;
+        } else {
+          // Use all categories if no specific category is provided
+          url += `&categories=accommodation,activity,airport,commercial,catering,emergency,education,childcare,entertainment,healthcare,heritage,highway,leisure,man_made,natural,national_park,office,parking,pet,power,production,railway,rental,service,tourism,religion,camping,amenity,beach,adult,building,ski,sport,public_transport,administrative,postal_code,political,low_emission_zone,populated_place`;
+        }
+
+        console.log('VenueService: Making API call to:', url);
+
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('VenueService: API response error:', response.status, errorText);
+          
+          if (response.status === 429) {
+            throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+          } else if (response.status === 400) {
+            throw new Error('Invalid search parameters. Please check your location and try again.');
+          } else if (response.status >= 500) {
+            throw new Error('Server error. Please try again in a moment.');
+          } else {
+            throw new Error(`Venue API error: ${response.status} - ${errorText}`);
+          }
+        }
+
+        const data = await response.json();
+        
+        if (!data.features || !Array.isArray(data.features)) {
+          console.log('VenueService: No features found in response');
+          return [];
+        }
+
+        // Parse basic venue data
+        let venues = data.features.map((feature: any) => this.parseVenue(feature, latitude, longitude));
+        venues = this.filterAndSortVenues(venues, params);
+
+        // Fetch detailed information for each venue in parallel
+        console.log('VenueService: Fetching details for', venues.length, 'venues');
+        const venuesWithDetails = await this.fetchVenueDetails(venues);
+
+        console.log('VenueService: Successfully processed', venuesWithDetails.length, 'venues with details');
+        cacheService.set(cacheKey, venuesWithDetails, 10 * 60 * 1000); // Cache for 10 minutes
+        return venuesWithDetails;
+      } catch (error) {
+        attempt++;
+        console.error(`VenueService: Error fetching venues (attempt ${attempt}/${maxRetries}):`, error);
+        
+        if (attempt === maxRetries) {
+          console.error('VenueService: Max retries reached, returning empty array');
+          return [];
+        }
+        
+        // Wait before retrying (exponential backoff)
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-
-      // Check rate limiting
-      const rateLimitKey = `venues-${params.latitude}-${params.longitude}`;
-      if (!rateLimiter.canMakeRequest(rateLimitKey, 3, 60 * 1000)) { // 3 requests per minute
-        throw new Error('Rate limit exceeded. Please try again later.');
-      }
-
-      // Check cache first
-      const cacheKey = `venues-${params.latitude}-${params.longitude}-${params.radius}-${params.category || 'all'}`;
-      const cachedData = cacheService.get<Venue[]>(cacheKey);
-      if (cachedData) {
-        console.log('VenueService: Returning cached data');
-        return cachedData;
-      }
-
-      const { latitude, longitude, radius, category, limit = 20 } = params;
-      
-      // Build the API URL with required categories parameter
-      let url = `${this.baseUrl}?filter=circle:${longitude},${latitude},${radius * 1000}&limit=${limit}&apiKey=${this.apiKey}`;
-      
-      // Add category filter if specified, otherwise use general categories
-      if (category) {
-        url += `&categories=${category}`;
-      } else {
-        // Use general venue categories if no specific category is provided
-        url += `&categories=catering`;
-      }
-
-      console.log('VenueService: Making API call to:', url);
-
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('VenueService: API response error:', response.status, errorText);
-        throw new Error(`Venue API error: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      
-      if (!data.features || !Array.isArray(data.features)) {
-        console.log('VenueService: No features found in response');
-        return [];
-      }
-      
-      let venues = data.features.map((feature: any) => this.parseVenue(feature, latitude, longitude));
-      
-      // Filter and sort venues
-      venues = this.filterAndSortVenues(venues, params);
-      
-      console.log('VenueService: Successfully processed', venues.length, 'venues');
-
-      // Cache the result for 10 minutes (venues change less frequently)
-      cacheService.set(cacheKey, venues, 10 * 60 * 1000);
-      
-      return venues;
-    } catch (error) {
-      console.error('VenueService: Error fetching venues:', error);
-      return [];
     }
+    
+    return [];
   }
 
   private filterAndSortVenues(venues: Venue[], params: VenueSearchParams): Venue[] {
@@ -207,6 +235,70 @@ class VenueService {
       website: properties.website,
       description: properties.description,
       tags: categoryArray,
+    };
+  }
+
+  private async fetchVenueDetails(venues: Venue[]): Promise<Venue[]> {
+    try {
+      // Create promises for fetching details for each venue
+      const detailPromises = venues.map(async (venue) => {
+        try {
+          // Check cache for venue details
+          const detailCacheKey = `venue-details-${venue.id}`;
+          const cachedDetails = cacheService.get<any>(detailCacheKey);
+          
+          if (cachedDetails) {
+            console.log('VenueService: Returning cached details for', venue.name);
+            return this.mergeVenueDetails(venue, cachedDetails);
+          }
+
+          // Fetch details from Geoapify Places Details API
+          const detailsUrl = `https://api.geoapify.com/v2/place-details?place_id=${venue.id}&apiKey=${this.apiKey}`;
+          
+          const response = await fetch(detailsUrl);
+          if (!response.ok) {
+            console.warn('VenueService: Failed to fetch details for', venue.name);
+            return venue; // Return venue without details if details fetch fails
+          }
+
+          const detailsData = await response.json();
+          
+          if (detailsData.features && detailsData.features.length > 0) {
+            const details = detailsData.features[0].properties;
+            
+            // Cache the details for 30 minutes
+            cacheService.set(detailCacheKey, details, 30 * 60 * 1000);
+            
+            return this.mergeVenueDetails(venue, details);
+          }
+          
+          return venue;
+        } catch (error) {
+          console.warn('VenueService: Error fetching details for', venue.name, error);
+          return venue; // Return venue without details if there's an error
+        }
+      });
+
+      // Wait for all detail requests to complete
+      const venuesWithDetails = await Promise.all(detailPromises);
+      return venuesWithDetails;
+    } catch (error) {
+      console.error('VenueService: Error fetching venue details:', error);
+      return venues; // Return venues without details if there's a general error
+    }
+  }
+
+  private mergeVenueDetails(venue: Venue, details: any): Venue {
+    return {
+      ...venue,
+      rating: details.rating || venue.rating,
+      priceRange: details.price || details.price_range || venue.priceRange,
+      hours: details.opening_hours || venue.hours,
+      phone: details.phone || venue.phone,
+      website: details.website || venue.website,
+      description: details.description || venue.description,
+      // Add any additional details from the API
+      tags: venue.tags,
     };
   }
 

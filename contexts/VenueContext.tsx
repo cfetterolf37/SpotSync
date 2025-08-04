@@ -100,9 +100,8 @@ export const VenueProvider = ({ children }: VenueProviderProps) => {
       const venuePromise = venueService.searchVenues({
         latitude: locationData.latitude,
         longitude: locationData.longitude,
-        radius: searchParams?.radius || 2,
-        category: searchParams?.category,
-        limit: 20,
+        radius: searchParams?.radius || 5,
+        category: searchParams?.category || undefined,
         minRating: searchParams?.minRating,
         sortBy: searchParams?.sortBy || 'distance'
       });

@@ -1,43 +1,137 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
-import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FilterModal } from '../../components';
 import { useAuth } from '../../contexts/AuthContext';
 import { useVenues } from '../../contexts/VenueContext';
 import { useWeather } from '../../contexts/WeatherContext';
 
 const { width } = Dimensions.get('window');
 
-export default function HomeScreen() {
+const HomeScreen = React.memo(() => {
   const { user, loading: authLoading } = useAuth();
   const { weather, loading: weatherLoading, error: weatherError } = useWeather();
-  const { venues, loading: venueLoading, error: venueError } = useVenues();
+  const { venues, loading: venueLoading, error: venueError, searchVenues } = useVenues();
+  const [showFilters, setShowFilters] = useState(false);
+  const [activeFilters, setActiveFilters] = useState({
+    category: '',
+    radius: 5,
+  });
 
-  const getWeatherIcon = (description: string) => {
+  const handleApplyFilters = useCallback(async (filters: { category: string; radius: number }) => {
+    setActiveFilters(filters);
+    console.log('Applying filters:', filters);
+    
+    // Call the venue context's searchVenues function with the new filters
+    await searchVenues({
+      category: filters.category || undefined,
+      radius: filters.radius,
+    });
+  }, [searchVenues]);
+
+  const getFilterIndicatorText = useCallback(() => {
+    const indicators = [];
+    if (activeFilters.category) {
+      indicators.push(activeFilters.category);
+    }
+    if (activeFilters.radius !== 5) {
+      indicators.push(`${activeFilters.radius} mi`);
+    }
+    return indicators.join(', ');
+  }, [activeFilters]);
+
+  const hasActiveFilters = useMemo(() => 
+    activeFilters.category || activeFilters.radius !== 5, 
+    [activeFilters]
+  );
+
+  const getWeatherIcon = useCallback((description: string) => {
     const desc = description.toLowerCase();
-    if (desc.includes('sun') || desc.includes('clear')) return 'sunny';
+    if (desc.includes('clear')) return 'sunny';
     if (desc.includes('cloud')) return 'cloudy';
     if (desc.includes('rain')) return 'rainy';
     if (desc.includes('snow')) return 'snow';
     if (desc.includes('thunder')) return 'thunderstorm';
     return 'partly-sunny';
-  };
+  }, []);
 
-  const getWeatherColor = (description: string) => {
+  const getWeatherColor = useCallback((description: string) => {
+    const weatherColors: { [key: string]: string } = {
+      'clear sky': '#FFD700',
+      'few clouds': '#87CEEB',
+      'scattered clouds': '#87CEEB',
+      'broken clouds': '#87CEEB',
+      'shower rain': '#4682B4',
+      'rain': '#4169E1',
+      'thunderstorm': '#483D8B',
+      'snow': '#F0F8FF',
+      'mist': '#E6E6FA',
+      'fog': '#D3D3D3',
+    };
+    return weatherColors[description.toLowerCase()] || '#87CEEB';
+  }, []);
+
+  const getWeatherGradient = useCallback((description: string): [string, string] => {
     const desc = description.toLowerCase();
-    if (desc.includes('sun') || desc.includes('clear')) return '#FFD700';
-    if (desc.includes('cloud')) return '#87CEEB';
-    if (desc.includes('rain')) return '#4682B4';
-    if (desc.includes('snow')) return '#F0F8FF';
-    return '#87CEEB';
-  };
+    
+    if (desc.includes('clear') || desc.includes('sun')) {
+      return ['#FFD700', '#FFA500']; // Golden to Orange for sunny
+    }
+    if (desc.includes('cloud')) {
+      return ['#87CEEB', '#B0C4DE']; // Sky Blue to Light Steel Blue for cloudy
+    }
+    if (desc.includes('rain') || desc.includes('shower')) {
+      return ['#4682B4', '#5F9EA0']; // Steel Blue to Cadet Blue for rain
+    }
+    if (desc.includes('snow')) {
+      return ['#F0F8FF', '#E6E6FA']; // Alice Blue to Lavender for snow
+    }
+    if (desc.includes('thunder')) {
+      return ['#483D8B', '#2F4F4F']; // Dark Slate Blue to Dark Slate Gray for storms
+    }
+    if (desc.includes('fog') || desc.includes('mist')) {
+      return ['#D3D3D3', '#C0C0C0']; // Light Gray to Silver for fog
+    }
+    // Default gradient for unknown weather
+    return ['#87CEEB', '#B0C4DE'];
+  }, []);
 
-  const renderHeader = () => (
+  const renderHeader = useCallback(() => (
     <View style={styles.header}>
-      <Text style={styles.title}>SpotSync</Text>
-      <Text style={styles.subtitle}>Discover amazing places near you</Text>
+      <View style={styles.headerContent}>
+        <View style={styles.logoContainer}>
+          <Image 
+            source={require('../../assets/images/SpotSyncLogo.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>SpotSync</Text>
+          {weather && weather.city && (
+            <View style={styles.locationContainer}>
+              <Ionicons name="location" size={12} color="rgba(255, 255, 255, 0.7)" />
+              <Text style={styles.locationText}>{weather.city}</Text>
+            </View>
+          )}
+        </View>
+        <TouchableOpacity 
+          style={styles.filterButton}
+          onPress={() => setShowFilters(true)}
+          accessibilityLabel="Open filters"
+          accessibilityHint="Opens the venue filter options"
+        >
+          <Ionicons name="funnel-outline" size={20} color="#FFFFFF" />
+          {hasActiveFilters && (
+            <View style={styles.filterIndicator}>
+              <Text style={styles.filterIndicatorText}>•</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
-  );
+  ), [weather, hasActiveFilters]);
 
   const renderLocationWeather = () => {
     if (authLoading) {
@@ -77,28 +171,45 @@ export default function HomeScreen() {
     }
 
     if (weather) {
+      const gradientColors = getWeatherGradient(weather.description);
+      
       return (
-        <View style={styles.locationWeatherCard}>
-          <View style={styles.weatherHeader}>
-            <View style={styles.locationSection}>
-              <Ionicons name="location" size={14} color="#FFFFFF" />
-              <Text style={styles.locationText}>{weather.city}</Text>
+        <LinearGradient
+          colors={gradientColors}
+          style={styles.locationWeatherCard}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.weatherMainRow}>
+            <View style={styles.weatherPrimary}>
+              <View style={styles.temperatureSection}>
+                <Text style={styles.temperatureF}>{weather.temperatureFahrenheit}°F</Text>
+                <Text style={styles.temperatureC}>{weather.temperatureCelsius}°C</Text>
+              </View>
+              <View style={styles.weatherIconContainer}>
+                <Ionicons 
+                  name={getWeatherIcon(weather.description)} 
+                  size={32} 
+                  color={getWeatherColor(weather.description)} 
+                />
+              </View>
             </View>
-            <Ionicons 
-              name={getWeatherIcon(weather.description)} 
-              size={20} 
-              color={getWeatherColor(weather.description)} 
-            />
-          </View>
-          
-          <View style={styles.weatherMain}>
-            <View style={styles.temperatureContainer}>
-              <Text style={styles.temperatureF}>{weather.temperatureFahrenheit}°F</Text>
-              <Text style={styles.temperatureC}>{weather.temperatureCelsius}°C</Text>
+            
+            <View style={styles.weatherSecondary}>
+              <Text style={styles.weatherDescription}>{weather.description}</Text>
+              <View style={styles.weatherStats}>
+                <View style={styles.weatherStat}>
+                  <Ionicons name="water-outline" size={14} color="#FFFFFF" />
+                  <Text style={styles.weatherStatText}>{weather.humidity}%</Text>
+                </View>
+                <View style={styles.weatherStat}>
+                  <Ionicons name="speedometer-outline" size={14} color="#FFFFFF" />
+                  <Text style={styles.weatherStatText}>{weather.windSpeed} km/h</Text>
+                </View>
+              </View>
             </View>
-            <Text style={styles.weatherDescription}>{weather.description}</Text>
           </View>
-        </View>
+        </LinearGradient>
       );
     }
 
@@ -114,10 +225,9 @@ export default function HomeScreen() {
     if (authLoading || weatherLoading) {
       return (
         <View style={styles.venuesSection}>
-          <Text style={styles.sectionTitle}>Nearby Venues</Text>
           <View style={styles.loadingCard}>
             <ActivityIndicator size="small" color="#FFFFFF" />
-            <Text style={styles.loadingText}>Finding venues near you...</Text>
+            <Text style={styles.loadingText}>Loading venues...</Text>
           </View>
         </View>
       );
@@ -126,10 +236,20 @@ export default function HomeScreen() {
     if (!user) {
       return (
         <View style={styles.venuesSection}>
-          <Text style={styles.sectionTitle}>Nearby Venues</Text>
-          <View style={styles.loadingCard}>
+          <View style={styles.errorCard}>
             <Ionicons name="person-circle-outline" size={24} color="#FFFFFF" />
-            <Text style={styles.loadingText}>Please sign in to see venues</Text>
+            <Text style={styles.errorText}>Please sign in to see venues</Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (venueLoading) {
+      return (
+        <View style={styles.venuesSection}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="small" color="#FFFFFF" />
+            <Text style={styles.loadingText}>Finding venues near you...</Text>
           </View>
         </View>
       );
@@ -138,7 +258,6 @@ export default function HomeScreen() {
     if (venueError) {
       return (
         <View style={styles.venuesSection}>
-          <Text style={styles.sectionTitle}>Nearby Venues</Text>
           <View style={styles.errorCard}>
             <Ionicons name="warning-outline" size={24} color="#FF6B6B" />
             <Text style={styles.errorText}>{venueError}</Text>
@@ -149,15 +268,21 @@ export default function HomeScreen() {
 
     return (
       <View style={styles.venuesSection}>
-        <Text style={styles.sectionTitle}>
-          Nearby Venues ({venues.length})
-        </Text>
-        
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>
+            Nearby Venues ({venues.length})
+          </Text>
+          {hasActiveFilters && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{getFilterIndicatorText()}</Text>
+            </View>
+          )}
+        </View>
         {venues.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Ionicons name="search-outline" size={24} color="#FFFFFF" />
-            <Text style={styles.emptyText}>No venues found nearby</Text>
-            <Text style={styles.emptySubtext}>Try expanding your search radius</Text>
+            <Ionicons name="search-outline" size={48} color="rgba(255, 255, 255, 0.5)" />
+            <Text style={styles.emptyText}>No venues found</Text>
+            <Text style={styles.emptySubtext}>Try adjusting your filters or location</Text>
           </View>
         ) : (
           <View style={styles.venuesList}>
@@ -170,7 +295,13 @@ export default function HomeScreen() {
               });
               
               return (
-                <TouchableOpacity key={venue.id} style={styles.venueCard}>
+                <TouchableOpacity 
+                  key={venue.id} 
+                  style={styles.venueCard}
+                  accessibilityLabel={`${venue.name}, ${venue.category}`}
+                  accessibilityHint={`Tap to view details for ${venue.name}`}
+                  accessibilityRole="button"
+                >
                   <View style={styles.venueHeader}>
                     <View style={styles.venueIconContainer}>
                       <Ionicons 
@@ -242,9 +373,20 @@ export default function HomeScreen() {
         {renderLocationWeather()}
         {renderVenuesSection()}
       </ScrollView>
+
+      <FilterModal
+        visible={showFilters}
+        onClose={() => setShowFilters(false)}
+        onApply={handleApplyFilters}
+        currentFilters={activeFilters}
+      />
     </View>
   );
-}
+});
+
+HomeScreen.displayName = 'HomeScreen';
+
+export default HomeScreen;
 
 const styles = StyleSheet.create({
   container: {
@@ -268,68 +410,109 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 40,
     marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  logoContainer: {
+    width: 50,
+    height: 50,
+    flexShrink: 0,
+  },
+  logo: {
+    width: '100%',
+    height: '100%',
+  },
+  titleContainer: {
+    flex: 1,
+    alignItems: 'center',
   },
   title: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#CCCCCC',
+    marginBottom: 4,
     textAlign: 'center',
   },
+  subtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  filterButton: {
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  filterIndicator: {
+    backgroundColor: '#FF6B6B',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  filterIndicatorText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
   locationWeatherCard: {
-    backgroundColor: 'rgba(135, 206, 235, 0.15)',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    backgroundColor: 'rgba(135, 206, 235, 0.2)',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
     borderWidth: 2,
-    borderColor: 'rgba(135, 206, 235, 0.3)',
+    borderColor: 'rgba(135, 206, 235, 0.4)',
     shadowColor: '#87CEEB',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  weatherHeader: {
+  weatherMainRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  locationSection: {
+  weatherPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  locationText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    marginLeft: 6,
-    fontWeight: '600',
+  weatherSecondary: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
-  weatherMain: {
-    // No specific styles for the main weather section, as it's a View
+  weatherIconContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 16,
+    padding: 8,
   },
-  temperatureContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline', // Align temperature and unit on the baseline
+  temperatureSection: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
   },
   temperatureF: {
     fontSize: 36,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginRight: 8,
+    marginRight: 4,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
   },
   temperatureC: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#FFFFFF',
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
@@ -337,10 +520,29 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   weatherDescription: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#FFFFFF',
     textTransform: 'capitalize',
-    marginTop: 4,
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  weatherStats: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  weatherStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  weatherStatText: {
+    fontSize: 10,
+    color: '#FFFFFF',
     fontWeight: '500',
   },
   loadingText: {
@@ -367,7 +569,7 @@ const styles = StyleSheet.create({
   loadingCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 16,
-    padding: 24,
+    padding: 20,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
@@ -375,7 +577,7 @@ const styles = StyleSheet.create({
   errorCard: {
     backgroundColor: 'rgba(255, 107, 107, 0.1)',
     borderRadius: 16,
-    padding: 24,
+    padding: 20,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 107, 107, 0.3)',
@@ -520,5 +722,35 @@ const styles = StyleSheet.create({
     color: '#6495ED',
     fontWeight: '600',
     textTransform: 'capitalize',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  filterBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  filterBadgeText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  locationText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginLeft: 4,
+    fontWeight: '500',
   },
 }); 

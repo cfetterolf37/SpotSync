@@ -1,0 +1,203 @@
+SpotSync - React Native Social Venue Discovery App
+Create SpotSync, a React Native application that allows users to discover nearby
+venues and share
+real-time information about deals, crowds, and conditions. SpotSync combines location-based venue
+discovery with community-driven insights and real-time social features.
+Core Features & Requirements
+1. Location & Venue Discovery
+Geolocation Integration: Get user's current location with proper permissions handling
+Geoapify Places API Integration: Search for venues using Geoapify's Places API
+Filtering System: Allow
+users to filter venues by:
+Category (restaurants, bars, arcades, entertainment, shopping, etc.)
+Radius (0.5km, 1km, 2km, 5km, 10km)
+Price range
+User ratings
+Current deals/specials availability
+Modern List View: Primary interface displaying venues in an elegant, card-based layout with:
+Clean typography and contemporary design elements
+Smooth animations and micro-interactions
+Progressive disclosure of information
+Swipe gestures for quick actions
+Pull-to-refresh f
+unctionality
+2. Caching & Performance
+Local Storage Caching: Cache venue search results with expiration timestamps
+Rate Limit Management:
+Implement request throttling for Geoapify API
+Cache results for at least 15-30 minutes to minimize API calls
+Show cached results immediately while refreshing in background
+Offline Support: Display cached venues when network is unavailable
+Smart Refresh: Only fetch new data when user moves significantly or cache expires
+3. User-Generated Content System
+Users can contribute real-time information about venues:
+Daily Deals & Specials: Text input with required photo uploads showing deal signage, menu
+items, or promotional materials
+Crowd Levels: Rating scale (Empty, Light, Moderate, Busy, Packed) with optional photos showing
+current venue conditions
+Wait Times: Input current wait times for tables/service with optional photos of lines or crowds
+Live Entertainment: Schedule and type of entertainment happening with optional photos/videos
+of performers or events
+Happy Hour Info: Time slots and specific deals with optional photos of drink specials or food
+items
+Parking Availability: Current parking situation with optional photos showing available spaces
+Special Events: Temporary events or promotions with required photos for verification
+General Notes: Open text field for other observations with optional photo attachments
+Venue Atmosphere Photos: Users can contribute photos showing current ambiance, decor,
+seating areas, and overall vibe
+4. Social Features & User Presence
+Real-Time User Presence: Show how many logged-in users are currently at each venue
+Check-In System: Users can check in/out of venues with optional privacy settings
+User Profiles at Venues: See who's currently at a location (with privacy controls)
+In-Venue Chat: Location-based chat rooms for each venue
+Direct Messaging: Connect with other users at the same venue
+Social Verification: User presence helps validate venue information accuracy
+Friend System: Add friends and see when they're at nearby
+venues
+Group Activities: Create or join groups meeting at specific venues
+5. Authentication & User Management
+Supabase Auth Integration: Complete authentication system
+Social Login Options:
+Google Sign-In
+Apple Sign-In (iOS)
+Facebook Login
+Email/Password registration
+User Profiles: Basic profile with contribution history and reputation score
+Anonymous Contributions: Allow some contributions without f
+ull registration
+6. Data Display & Decision Making
+Venue Detail Pages: Comprehensive view combining:
+Basic venue info (hours, contact, category information from Geoapify)
+User-uploaded photo gallery showing deals, atmosphere, and current conditions
+Photo-verified deals and specials with timestamps
+Real-time user contributions
+Live user count and presence indicators
+Currently checked-in users (with privacy settings)
+Venue-specific chat feed
+Historical data trends
+User reviews and ratings
+Photo-Based Verification: Use photo uploads to verify deals, specials, and venue conditions
+Visual Discovery: Browse venues based on recent user photos showing atmosphere and current
+state
+Social Context: Show
+friends' activity and check-ins at venues
+Community Validation: User presence data and photos help verify
+venue information
+Smart Recommendations: Suggest venues based on current conditions, user preferences, social
+activity, and recent photos
+Time-Sensitive Alerts: Notify users of expiring deals, changing conditions, or when friends check
+in nearby
+Contribution Timestamps: Show how recent each piece of information and photos are
+User Verification: System to verify and validate user contributions through presence correlation
+and photo authenticity
+Technical Specifications
+Backend & Database (Supabase)
+sql
+-- Core tables structure
+Tables needed:
+- venues (id, name, address, coordinates, category, geoapify_place_id)
+- user_contributions (id, user_id, venue_id, contribution_type, content, expires_at, created_at)
+- contribution_photos (id, contribution_id, photo_url, photo_type, uploaded_at, is_primary)
+- venue_photos (id, venue_id, user_id, photo_url, photo_type, description, uploaded_at, verification_status)
+- user_checkins (id, user_id, venue_id, checked_in_at, checked_out_at, is_active, privacy_level)
+- venue_chats (id, venue_id, user_id, message, created_at, parent_message_id)
+- direct_messages (id, sender_id, recipient_id, message, created_at, venue_context_id)
+- user_friends (id, user_id, friend_id, status, created_at)
+- venue_groups (id, venue_id, creator_id, name, description, meeting_time, max_members)
+- group_members (id, group_id, user_id, joined_at, status)
+- users (supabase auth + profile data, privacy_settings, is_online)
+- cached_searches (location_hash, radius, category, results, expires_at)
+- venue_ratings (user_id, venue_id, rating, review_text)
+Key React Native Libraries
+@react-native-async-storage/async-storage: Local caching
+@react-native-geolocation/geolocation: Location services
+react-native-maps: Map integration with user presence markers
+@supabase/supabase-js: Backend integration and real-time subscriptions
+react-native-image-picker: Photo capture and selection for venue contributions
+react-native-image-resizer: Optimize photo uploads for performance
+@react-native-google-signin/google-signin: Google authentication
+react-native-vector-icons: UI icons
+react-native-gifted-chat: Chat interface for venue and direct messaging
+@react-native-community/push-notification-ios: Push notifications for social interactions
+react-native-background-timer: Background location updates for check-ins
+react-native-fast-image: Optimized image loading for user-uploaded photos
+react-native-photo-view: Full-screen photo viewing with zoom capabilities
+API Integration Patterns
+Geoapify Places API:
+Implement proper API key management
+Handle rate limiting gracef
+ully
+Parse and normalize venue data (note: does not include photos)
+Focus on venue discovery, categories, and basic information
+Supabase Storage: Handle user photo uploads with automatic optimization and CDN delivery
+Photo Management:
+Implement image compression before upload
+Generate multiple sizes for different UI contexts
+Auto-delete expired deal photos
+Moderate user-uploaded content
+Caching Strategy:
+Hash location + radius + filters as cache key
+Implement L
+R
+U cache eviction
+Background refresh for popular locations
+Cache user photos locally for faster loading
+UI/UX Requirements
+Modern, Sleek Interface:
+Contemporary design with glassmorphism elements
+Subtle shadows and depth
+Vibrant accent colors and smooth gradients
+Clean typography hierarchy
+Fluid animations and transitions
+List-First Design: Focus on perfecting the list view experience before adding maps
+Fast Loading: Show cached data immediately, refresh in background
+Intuitive Filtering: Easy-to-use filter interface with visual feedback
+Real-Time Updates: Live updates of
+user contributions, check-ins, and chat messages
+Social Indicators: Visual cues for user presence, friend activity, and popular venues
+Chat Interface: Seamless messaging experience within venue context
+Privacy Controls: Granular privacy settings for check-ins and profile visibility
+Accessibility: Proper labels and navigation for screen readers
+Dark/Light Mode: Support system theme preferences with beautif
+ul color schemes
+Push Notifications: Smart notifications for social interactions and venue updates
+Implementation Priority
+1. Phase 1: Modern list-based UI, location services, Geoapify integration, venue display with
+contemporary design
+2. Phase 2: Supabase auth, user check-ins, basic presence system
+3. Phase 3: Venue chat, direct messaging, user-generated content
+4. Phase 4: Advanced filtering, caching system, map integration with social markers
+5. Phase 5: Friend system, group activities, push notifications
+6. Phase 6: Analytics, user reputation system, advanced social features
+Additional Considerations
+Privacy: Handle location data responsibly, granular privacy controls for social features and photo
+sharing
+Photo Storage & Management: Efficient photo upload, compression, and CDN delivery through
+Supabase Storage
+Content Moderation: System to report and moderate inappropriate contributions, messages, and
+photos
+Photo Verification: Implement systems to verify photo authenticity and relevance to venues
+Real-Time Infrastructure: Implement efficient WebSocket connections for live updates
+Safety Features: Report/block users, venue safety ratings, emergency contacts
+Scalability: Design database schema and real-time systems to handle concurrent users and photo
+uploads
+Social Verification: Use user presence and photos to validate venue information accuracy
+Analytics: Track app usage, popular venues, social engagement patterns, and photo engagement
+Monetization Options: Consider premium features, venue partnerships, or promoted content
+Cross-Platform: Ensure consistent social and photo experience on iOS and Android
+Offline Mode: Core features available when connectivity is limited, with photo upload queuing
+Success Metrics
+User engagement with social features and real-time interactions
+Active check-ins and user presence accuracy
+Chat participation and direct message usage
+User retention through social connections
+Accuracy and freshness of venue information through community
+Daily active users and social engagement rates
+API cost efficiency through effective caching
+Community participation in content creation and social features
+Friend connections and group activity formation
+validation
+Create a f
+ully f
+unctional SpotSync app with clean, production-ready code, proper error handling, and
+comprehensive documentation for setup and deployment.
