@@ -11,8 +11,8 @@ interface FilterModalProps {
 }
 
 const CATEGORIES = [
-  { id: 'accomodation,activity,airport,commercial,catering,emergency,education,childcare,entertainment,healthcare,heritage,highway,leisure,man_made,natural,national_park,office,parking,pet,power,production,railway,rental,service,tourism,religion,camping,amenity,beach,adult,building,ski,sport,public_transport,administrative,postal_code,political,low_emission_zone,populated_place', name: 'All Categories' },
-  { id: 'accomodation', name: 'Accomodations' },
+  { id: 'accommodation,activity,airport,commercial,catering,emergency,education,childcare,entertainment,healthcare,heritage,highway,leisure,man_made,natural,national_park,office,parking,pet,power,production,railway,rental,service,tourism,religion,camping,amenity,beach,adult,building,ski,sport,public_transport,administrative,postal_code,political,low_emission_zone,populated_place', name: 'All Categories' },
+  { id: 'accommodation', name: 'Accommodations' },
   { id: 'activity', name: 'Activity' },
   { id: 'airport', name: 'Airport' },
   { id: 'commercial', name: 'Commercial' },

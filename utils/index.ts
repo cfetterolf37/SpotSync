@@ -3,6 +3,9 @@ import { COLORS, ERROR_MESSAGES, VALIDATION } from '../constants';
 // Import Platform for device utilities
 import { Platform } from 'react-native';
 
+// Export logger
+export { logger } from './logger';
+
 // Validation Utilities
 export const validateEmail = (email: string): boolean => {
   return VALIDATION.EMAIL_REGEX.test(email);

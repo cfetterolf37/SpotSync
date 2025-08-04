@@ -1,6 +1,7 @@
 import { Session, User } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 
 interface AuthContextType {
   user: User | null;
@@ -39,23 +40,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
 
-    console.log('AuthContext: Initializing...');
+    logger.auth('Initializing...');
 
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('AuthContext: Initial session loaded', !!session);
+      logger.auth('Initial session loaded', { hasSession: !!session });
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     }).catch((error) => {
-      console.error('AuthContext: Error loading session', error);
+      logger.error('Error loading session', 'Auth', error);
       setLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('AuthContext: Auth state changed', event, !!session);
+        logger.auth('Auth state changed', { event, hasSession: !!session });
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -87,7 +88,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signOut = async () => {
-    console.log('AuthContext: Signing out...');
+    logger.auth('Signing out...');
     await supabase.auth.signOut();
   };
 

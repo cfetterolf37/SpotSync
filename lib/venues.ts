@@ -6,8 +6,6 @@ export interface Venue {
   name: string;
   address: string;
   category: string;
-  rating?: number;
-  priceRange?: string;
   distance: number;
   coordinates: {
     latitude: number;
@@ -16,7 +14,9 @@ export interface Venue {
   hours?: string;
   phone?: string;
   website?: string;
-  description?: string;
+  facebook?: string;
+  twitter?: string;
+  instagram?: string;
   tags: string[];
 }
 
@@ -148,21 +148,12 @@ class VenueService {
   private filterAndSortVenues(venues: Venue[], params: VenueSearchParams): Venue[] {
     let filteredVenues = venues;
 
-    // Filter by rating if specified
-    if (params.minRating) {
-      filteredVenues = filteredVenues.filter(venue => 
-        venue.rating && venue.rating >= params.minRating!
-      );
-    }
-
     // Sort venues
     if (params.sortBy) {
       filteredVenues.sort((a, b) => {
         switch (params.sortBy) {
           case 'distance':
             return a.distance - b.distance;
-          case 'rating':
-            return (b.rating || 0) - (a.rating || 0);
           case 'name':
             return a.name.localeCompare(b.name);
           default:
@@ -181,17 +172,6 @@ class VenueService {
     const properties = feature.properties || {};
     const geometry = feature.geometry;
     
-    // Debug: Log the properties to see what we're getting
-    console.log('VenueService: Parsing venue properties:', {
-      name: properties.name,
-      rating: properties.rating,
-      price: properties.price,
-      price_range: properties.price_range,
-      stars: properties.stars,
-      price_level: properties.price_level,
-      allProperties: Object.keys(properties)
-    });
-    
     // Calculate distance from user
     const distance = this.calculateDistance(
       userLat, userLng,
@@ -204,7 +184,7 @@ class VenueService {
     return {
       id: properties.place_id || `venue-${Date.now()}`,
       name: properties.name || 'Unknown Venue',
-      address: properties.formatted || properties.address_line1 || '',
+      address: '',
       category: categoryArray[0] || 'venue',
       distance,
       coordinates: {
@@ -230,7 +210,7 @@ class VenueService {
           }
 
           // Fetch details from Geoapify Places Details API
-          const detailsUrl = `https://api.geoapify.com/v2/place-details?place_id=${venue.id}&apiKey=${this.apiKey}`;
+          const detailsUrl = `https://api.geoapify.com/v2/place-details?id=${venue.id}&features=details,details.population,details.names&apiKey=${this.apiKey}`;
           
           const response = await fetch(detailsUrl);
           if (!response.ok) {
@@ -266,16 +246,16 @@ class VenueService {
   }
 
   private mergeVenueDetails(venue: Venue, details: any): Venue {
-    console.log('VenueService: Merging venue details for', venue.name, details);
+    console.log(details.datasource.raw['contact:facebook'])
     return {
       ...venue,
-      rating: details.rating || venue.rating,
-      priceRange: details.price || details.price_range || venue.priceRange,
-      hours: details.opening_hours || venue.hours,
-      phone: details.phone || venue.phone,
-      website: details.website || venue.website,
-      description: details.description || venue.description,
-      // Add any additional details from the API
+      address: details.address_line2,
+      hours: details.opening_hours,
+      phone: details.contact.phone,
+      website: details.datasource.raw['website'],
+      facebook: details.datasource.raw['contact:facebook'],
+      twitter: details.datasource.raw['contact:twitter'],
+      instagram: details.datasource.raw['contact:instagram'],
       tags: venue.tags,
     };
   }
@@ -299,27 +279,113 @@ class VenueService {
 
   getCategoryIcon(category: string): string {
     const iconMap: { [key: string]: string } = {
+      // Accommodation & Travel
+      'accommodation': 'bed',
+      'hotel': 'bed',
+      'motel': 'bed',
+      'resort': 'umbrella',
+      
+      // Activity & Entertainment
+      'activity': 'game-controller',
+      'entertainment': 'game-controller',
+      'leisure': 'game-controller',
+      'tourism': 'camera',
+      
+      // Transportation
+      'airport': 'airplane',
+      'public_transport': 'bus',
+      'railway': 'train',
+      'highway': 'car',
+      'parking': 'car',
+      
+      // Food & Dining
+      'catering': 'restaurant',
       'restaurant': 'restaurant',
       'bar': 'wine',
       'cafe': 'cafe',
-      'entertainment': 'game-controller',
+      
+      // Shopping & Commercial
+      'commercial': 'bag',
       'shopping': 'bag',
+      'retail': 'bag',
+      
+      // Sports & Recreation
+      'sport': 'football',
       'sports': 'football',
-      'health': 'fitness',
-      'beauty': 'cut',
+      'ski': 'snow',
+      'beach': 'umbrella',
+      'camping': 'tent',
+      
+      // Health & Wellness
+      'healthcare': 'medical',
+      'health': 'medical',
+      'fitness': 'fitness',
+      
+      // Education & Childcare
       'education': 'school',
-      'transport': 'car',
-      'finance': 'card',
+      'childcare': 'people',
+      
+      // Services
+      'service': 'construct',
+      'amenity': 'construct',
+      'rental': 'key',
+      
+      // Business & Office
+      'office': 'business',
+      'administrative': 'business',
       'government': 'business',
+      
+      // Emergency & Safety
+      'emergency': 'warning',
+      
+      // Cultural & Heritage
+      'heritage': 'library',
+      'religion': 'church',
+      'national_park': 'leaf',
+      
+      // Infrastructure
+      'man_made': 'construct',
+      'natural': 'leaf',
+      'power': 'flash',
+      'production': 'construct',
+      
+      // Pets & Animals
+      'pet': 'paw',
+      
+      // Postal & Political
+      'postal_code': 'mail',
+      'political': 'flag',
+      
+      // Environmental
+      'low_emission_zone': 'leaf',
+      
+      // Population
+      'populated_place': 'people',
+      
+      // Building & Construction
+      'building': 'business',
+      
+      // Adult Entertainment
+      'adult': 'heart',
+      
+      // Default
       'default': 'location',
     };
 
     const normalizedCategory = category.toLowerCase();
+    
+    // First try exact matches
+    if (iconMap[normalizedCategory]) {
+      return iconMap[normalizedCategory];
+    }
+    
+    // Then try partial matches
     for (const [key, icon] of Object.entries(iconMap)) {
       if (normalizedCategory.includes(key)) {
         return icon;
       }
     }
+    
     return iconMap.default;
   }
 

@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { FilterModal } from '../../components';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Dimensions, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AddDealModal, FilterModal } from '../../components';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDailyDeals } from '../../contexts/DailyDealsContext';
 import { useVenues } from '../../contexts/VenueContext';
 import { useWeather } from '../../contexts/WeatherContext';
+import { venueService } from '../../lib/venues';
 
 const { width } = Dimensions.get('window');
 
@@ -15,7 +17,11 @@ const HomeScreen = React.memo(() => {
   const { user, loading: authLoading } = useAuth();
   const { weather, loading: weatherLoading, error: weatherError } = useWeather();
   const { venues, loading: venueLoading, error: venueError, searchVenues } = useVenues();
+  const { createDeal, getVenueDealCount } = useDailyDeals();
   const [showFilters, setShowFilters] = useState(false);
+  const [showAddDeal, setShowAddDeal] = useState(false);
+  const [selectedVenue, setSelectedVenue] = useState<{ id: string; name: string; category: string } | null>(null);
+  const [dealCounts, setDealCounts] = useState<{ [venueId: string]: number }>({});
   const [activeFilters, setActiveFilters] = useState({
     category: '',
     radius: 5,
@@ -35,6 +41,53 @@ const HomeScreen = React.memo(() => {
     console.log('Venue card tapped, navigating to:', `/venue-details?venueId=${venueId}`);
     router.push(`/venue-details?venueId=${venueId}`);
   }, [router]);
+
+  const handleAddDeal = useCallback((venue: { id: string; name: string; category: string }) => {
+    setSelectedVenue(venue);
+    setShowAddDeal(true);
+  }, []);
+
+  const handleOpenMaps = useCallback((venue: { name: string; coordinates: { latitude: number; longitude: number } }) => {
+    const { latitude, longitude } = venue.coordinates;
+    const url = `https://maps.apple.com/?q=${encodeURIComponent(venue.name)}&ll=${latitude},${longitude}`;
+    
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+        // Fallback to Google Maps
+        const googleMapsUrl = `https://maps.google.com/?q=${encodeURIComponent(venue.name)}&ll=${latitude},${longitude}`;
+        Linking.openURL(googleMapsUrl);
+      }
+    }).catch((error) => {
+      console.error('Error opening maps:', error);
+    });
+  }, []);
+
+  // Load deal counts for venues
+  const loadDealCounts = useCallback(async () => {
+    if (venues.length === 0) return;
+    
+    console.log('Loading deal counts for venues:', venues.length);
+    const counts: { [venueId: string]: number } = {};
+    for (const venue of venues.slice(0, 10)) {
+      try {
+        const count = await getVenueDealCount(venue.id);
+        counts[venue.id] = count;
+        console.log(`Deal count for ${venue.name}: ${count}`);
+      } catch (error) {
+        console.error('Error loading deal count for venue:', venue.id, error);
+        counts[venue.id] = 0;
+      }
+    }
+    console.log('Final deal counts:', counts);
+    setDealCounts(counts);
+  }, [venues, getVenueDealCount]);
+
+  // Load deal counts when venues change
+  useEffect(() => {
+    loadDealCounts();
+  }, [loadDealCounts]);
 
   const getFilterIndicatorText = useCallback(() => {
     const indicators = [];
@@ -278,8 +331,6 @@ const HomeScreen = React.memo(() => {
                           console.log('Rendering venue card:', venue.id, venue.name);
                           console.log('Venue card data:', {
                             name: venue.name,
-                            rating: venue.rating,
-                            priceRange: venue.priceRange,
                             distance: venue.distance
                           });
 
@@ -288,45 +339,50 @@ const HomeScreen = React.memo(() => {
                   key={venue.id}
                   style={styles.venueCard}
                   accessibilityLabel={`${venue.name}, ${venue.category}`}
-                  accessibilityHint={`Tap to view details for ${venue.name}`}
+                  accessibilityHint={`Double tap to view details for ${venue.name}`}
                   accessibilityRole="button"
+                  accessibilityState={{ disabled: false }}
+                  accessibilityActions={[
+                    { name: 'activate', label: 'View venue details' },
+                    { name: 'longpress', label: 'Add deal to venue' }
+                  ]}
                   onPress={() => handleVenuePress(venue.id)}
+                  onLongPress={() => handleAddDeal({ id: venue.id, name: venue.name, category: venue.category })}
+                  activeOpacity={0.9}
                 >
+                  {/* Subtle gradient overlay */}
+                  <LinearGradient
+                    colors={['rgba(255, 255, 255, 0.02)', 'transparent', 'rgba(0, 0, 0, 0.02)']}
+                    style={styles.cardGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  />
                   <View style={styles.venueCardHeader}>
                     <View style={styles.venueMainInfo}>
                       <View style={styles.venueIconContainer}>
                         <Ionicons
-                          name="restaurant"
+                          name={venueService.getCategoryIcon(venue.category) as any}
                           size={24}
                           color="#FFFFFF"
                         />
                       </View>
                       <View style={styles.venueTitleSection}>
-                        <Text style={styles.venueName} numberOfLines={1}>
-                          {venue.name}
-                        </Text>
+                        <View style={styles.venueTitleRow}>
+                          <Text style={styles.venueName} numberOfLines={1}>
+                            {venue.name}
+                          </Text>
+                          {/* Debug: Always show deal count for testing */}
+                          <View style={[styles.dealCountPill, { backgroundColor: dealCounts[venue.id] > 0 ? 'rgba(135, 206, 235, 0.15)' : 'rgba(255, 255, 255, 0.1)' }]}>
+                            <Ionicons name="pricetag" size={12} color={dealCounts[venue.id] > 0 ? "#87CEEB" : "rgba(255, 255, 255, 0.5)"} />
+                            <Text style={[styles.dealCountPillText, { color: dealCounts[venue.id] > 0 ? "#87CEEB" : "rgba(255, 255, 255, 0.5)" }]}>
+                              {dealCounts[venue.id] || 0} deals
+                            </Text>
+                          </View>
+                        </View>
                         <Text style={styles.venueCategory} numberOfLines={1}>
                           {venue.category}
                         </Text>
                       </View>
-                    </View>
-                    <View style={styles.venueStats}>
-                      {venue.rating && venue.rating > 0 && (
-                        <View style={styles.venueRating}>
-                          <Ionicons name="star" size={14} color="#FFD700" />
-                          <Text style={styles.ratingText}>{venue.rating}</Text>
-                        </View>
-                      )}
-                      {venue.priceRange && venue.priceRange !== '' && (
-                        <View style={styles.priceContainer}>
-                          <Text style={styles.priceText}>
-                            {venue.priceRange === '1' ? '$' :
-                             venue.priceRange === '2' ? '$$' :
-                             venue.priceRange === '3' ? '$$$' :
-                             venue.priceRange === '4' ? '$$$$' : venue.priceRange}
-                          </Text>
-                        </View>
-                      )}
                     </View>
                   </View>
 
@@ -335,18 +391,35 @@ const HomeScreen = React.memo(() => {
                   </Text>
 
                   <View style={styles.venueCardFooter}>
-                    <View style={styles.distanceContainer}>
+                    <TouchableOpacity 
+                      style={styles.distanceContainer}
+                      onPress={() => handleOpenMaps({ name: venue.name, coordinates: venue.coordinates })}
+                      accessibilityLabel="Open directions to venue"
+                      accessibilityHint="Tap to open maps with directions to this venue"
+                      accessibilityRole="button"
+                    >
                       <Ionicons name="location-outline" size={14} color="#87CEEB" />
                       <Text style={styles.distanceText}>
                         {(venue.distance * 0.621371).toFixed(1)} mi away
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                     <View style={styles.venueActions}>
-                      <TouchableOpacity style={styles.actionButton}>
-                        <Ionicons name="call-outline" size={16} color="#87CEEB" />
+                      <TouchableOpacity 
+                        style={styles.actionButton}
+                        onPress={() => handleAddDeal({ id: venue.id, name: venue.name, category: venue.category })}
+                        accessibilityLabel="Add deal to venue"
+                        accessibilityHint="Tap to add a daily deal for this venue"
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="pricetag-outline" size={16} color="#87CEEB" />
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.actionButton}>
-                        <Ionicons name="navigate-outline" size={16} color="#87CEEB" />
+                      <TouchableOpacity 
+                        style={styles.actionButton}
+                        accessibilityLabel="Call venue"
+                        accessibilityHint="Tap to call this venue"
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="call-outline" size={16} color="#87CEEB" />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -378,15 +451,28 @@ const HomeScreen = React.memo(() => {
         {renderVenuesSection()}
       </ScrollView>
 
-      <FilterModal
-        visible={showFilters}
-        onClose={() => setShowFilters(false)}
-        onApply={handleApplyFilters}
-        currentFilters={activeFilters}
-      />
-    </View>
-  );
-});
+                        <FilterModal
+                    visible={showFilters}
+                    onClose={() => setShowFilters(false)}
+                    onApply={handleApplyFilters}
+                    currentFilters={activeFilters}
+                  />
+
+                  {selectedVenue && (
+                    <AddDealModal
+                      visible={showAddDeal}
+                      onClose={() => {
+                        setShowAddDeal(false);
+                        setSelectedVenue(null);
+                      }}
+                      venueId={selectedVenue.id}
+                      venueName={selectedVenue.name}
+                      venueCategory={selectedVenue.category}
+                    />
+                  )}
+                </View>
+              );
+            });
 
 HomeScreen.displayName = 'HomeScreen';
 
@@ -612,22 +698,30 @@ const styles = StyleSheet.create({
     // No specific styles for the list container, as it's a View
   },
   venueCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 8,
+      height: 12,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 15,
     position: 'relative',
     overflow: 'hidden',
+  },
+  cardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 24,
   },
   venueCardHeader: {
     flexDirection: 'row',
@@ -642,37 +736,47 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   venueIconContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 20,
+    padding: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   venueTitleSection: {
     flex: 1,
   },
+  venueTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   venueName: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 4,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    marginBottom: 6,
+    textShadowColor: 'rgba(0, 0, 0, 0.4)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 3,
+    flex: 1,
   },
   venueCategory: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
     textTransform: 'capitalize',
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 1,
+    fontWeight: '500',
   },
   venueStats: {
     flexDirection: 'row',
@@ -682,13 +786,21 @@ const styles = StyleSheet.create({
   venueRating: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 193, 7, 0.25)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 193, 7, 0.2)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 193, 7, 0.4)',
-    gap: 4,
+    borderColor: 'rgba(255, 193, 7, 0.3)',
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   ratingText: {
     fontSize: 13,
@@ -696,12 +808,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   priceContainer: {
-    backgroundColor: 'rgba(76, 175, 80, 0.25)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(76, 175, 80, 0.4)',
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   priceText: {
     fontSize: 13,
@@ -709,13 +829,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   venueAddress: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 16,
-    lineHeight: 22,
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginBottom: 20,
+    lineHeight: 24,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 1,
+    fontWeight: '400',
   },
   venueCardFooter: {
     flexDirection: 'row',
@@ -725,27 +846,105 @@ const styles = StyleSheet.create({
   distanceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 6,
+    backgroundColor: 'rgba(135, 206, 235, 0.1)',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(135, 206, 235, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    // Add subtle hover effect
+    minHeight: 44, // Ensure touch target is large enough
   },
   distanceText: {
     fontSize: 13,
-    color: '#FFFFFF',
-    fontWeight: '500',
+    color: '#87CEEB',
+    fontWeight: '600',
   },
   venueActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 6,
+    alignItems: 'center',
   },
   actionButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: 12,
     padding: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 40,
+    minHeight: 40,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dealCountBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 10,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  dealCountText: {
+    fontSize: 8,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 12,
+  },
+  dealCountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(135, 206, 235, 0.12)',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(135, 206, 235, 0.25)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dealCountPillText: {
+    fontSize: 12,
+    color: '#87CEEB',
+    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row',

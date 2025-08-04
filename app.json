@@ -11,7 +11,9 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app uses location to provide weather information for your current area."
+        "NSLocationWhenInUseUsageDescription": "This app uses location to provide weather information for your current area.",
+        "NSCameraUsageDescription": "This app uses the camera to take photos of daily deals and venue information.",
+        "NSPhotoLibraryUsageDescription": "This app uses the photo library to select images for daily deals and venue information."
       }
     },
     "android": {
@@ -22,7 +24,10 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -36,6 +41,13 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow SpotSync to use your location to provide weather information."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow SpotSync to access your photos to select images for daily deals.",
+          "cameraPermission": "Allow SpotSync to use your camera to take photos of daily deals."
         }
       ]
     ],

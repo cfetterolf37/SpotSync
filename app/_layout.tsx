@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Dimensions, Image, StyleSheet, View } from "react-native";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
+import { DailyDealsProvider } from "../contexts/DailyDealsContext";
 import { VenueProvider, useVenues } from "../contexts/VenueContext";
 import { WeatherProvider, useWeather } from "../contexts/WeatherContext";
 import { securityService } from "../lib/security";
@@ -133,7 +134,9 @@ export default function RootLayout() {
       <AuthProvider>
         <WeatherProvider>
           <VenueProvider>
-            <RootLayoutNav />
+            <DailyDealsProvider>
+              <RootLayoutNav />
+            </DailyDealsProvider>
           </VenueProvider>
         </WeatherProvider>
       </AuthProvider>

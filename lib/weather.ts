@@ -18,6 +18,10 @@ export interface LocationData {
   longitude: number;
 }
 
+/**
+ * Weather service for fetching and managing weather data from OpenWeatherMap API
+ * Handles caching, rate limiting, and performance monitoring
+ */
 class WeatherService {
   private apiKey: string;
   private baseUrl = 'https://api.openweathermap.org/data/2.5';
@@ -25,10 +29,17 @@ class WeatherService {
   constructor() {
     this.apiKey = process.env.EXPO_PUBLIC_OPENWEATHER_API_KEY || '';
     if (!this.apiKey) {
-      console.warn('OpenWeatherMap API key not found. Please add EXPO_PUBLIC_OPENWEATHER_API_KEY to your .env file');
+      logger.warn('OpenWeatherMap API key not found. Please add EXPO_PUBLIC_OPENWEATHER_API_KEY to your .env file');
     }
   }
 
+  /**
+   * Fetches current weather data for the given coordinates
+   * @param latitude - The latitude coordinate
+   * @param longitude - The longitude coordinate
+   * @returns Promise<WeatherData | null> - Weather data or null if failed
+   * @throws Error when API key is missing or API call fails
+   */
   async getCurrentWeather(latitude: number, longitude: number): Promise<WeatherData | null> {
     return performanceMonitor.monitorApiCall(
       'weather-api-call',

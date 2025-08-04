@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useRef, useState } from 'react';
 import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Venue } from '../lib/venues';
+import { Venue, venueService } from '../lib/venues';
 import { WeatherData } from '../lib/weather';
 
 interface VenueCardProps {
@@ -121,7 +121,7 @@ export const VenueCard: React.FC<VenueCardProps> = ({
         <View style={styles.categoryContainer}>
           <View style={styles.categoryTag}>
             <Ionicons 
-              name="restaurant" 
+              name={venueService.getCategoryIcon(venue.category) as any} 
               size={14} 
               color="#007AFF" 
             />

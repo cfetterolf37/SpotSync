@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useMemo } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Dimensions, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AddDealModal, DailyDealCard } from '../components';
+import { useDailyDeals } from '../contexts/DailyDealsContext';
 import { useVenues } from '../contexts/VenueContext';
+import { venueService } from '../lib/venues';
 
 const { width } = Dimensions.get('window');
 
@@ -11,35 +14,133 @@ export default function VenueDetailsScreen() {
   const router = useRouter();
   const { venueId } = useLocalSearchParams<{ venueId: string }>();
   const { venues } = useVenues();
+  const { deals, loading: dealsLoading, loadVenueDeals } = useDailyDeals();
+  const [showAddDeal, setShowAddDeal] = useState(false);
 
   const venue = useMemo(() => {
-    return venues.find(v => v.id === venueId);
+    console.log('Looking for venue with ID:', venueId);
+    console.log('Available venues:', venues.map(v => ({ id: v.id, name: v.name })));
+    const foundVenue = venues.find(v => v.id === venueId);
+    console.log('Found venue:', foundVenue);
+    return foundVenue;
   }, [venues, venueId]);
+
+  // Load deals when venue changes
+  useEffect(() => {
+    if (venueId) {
+      console.log('Loading deals for venue ID:', venueId);
+      loadVenueDeals(venueId);
+    }
+  }, [venueId, loadVenueDeals]);
+
+  // Debug: Log deals when they change
+  useEffect(() => {
+    console.log('Deals updated:', deals);
+  }, [deals]);
 
   const handleBack = useCallback(() => {
     router.back();
   }, [router]);
 
+
+
+
+
+
+
+  const handleOpenMaps = useCallback(() => {
+    if (venue?.coordinates) {
+      const { latitude, longitude } = venue.coordinates;
+      const url = `https://maps.apple.com/?q=${encodeURIComponent(venue.name)}&ll=${latitude},${longitude}`;
+      
+      Linking.canOpenURL(url).then((supported) => {
+        if (supported) {
+          Linking.openURL(url);
+        } else {
+          // Fallback to Google Maps
+          const googleMapsUrl = `https://maps.google.com/?q=${encodeURIComponent(venue.name)}&ll=${latitude},${longitude}`;
+          Linking.openURL(googleMapsUrl);
+        }
+      }).catch((error) => {
+        console.error('Error opening maps:', error);
+      });
+    }
+  }, [venue]);
+
+  const handleOpenLink = useCallback((url: string, type: string) => {
+    if (url) {
+      Linking.canOpenURL(url).then((supported) => {
+        if (supported) {
+          Linking.openURL(url);
+        } else {
+          console.error(`Cannot open ${type} link:`, url);
+        }
+      }).catch((error) => {
+        console.error(`Error opening ${type} link:`, error);
+      });
+    }
+  }, []);
+
   const handleCall = useCallback(() => {
     if (venue?.phone) {
-      // In a real app, you'd use Linking to make the call
-      console.log('Calling:', venue.phone);
+      const phoneUrl = `tel:${venue.phone.replace(/\s/g, '')}`;
+      Linking.openURL(phoneUrl);
     }
   }, [venue]);
 
-  const handleNavigate = useCallback(() => {
-    if (venue?.coordinates) {
-      // In a real app, you'd use Linking to open maps
-      console.log('Navigating to:', venue.coordinates);
-    }
-  }, [venue]);
+  // Format hours for professional display
+  const formatHours = useCallback((hoursString: string) => {
+    if (!hoursString) return [];
+    
+    const dayMap: { [key: string]: string } = {
+      'Mo': 'Monday',
+      'Tu': 'Tuesday', 
+      'We': 'Wednesday',
+      'Th': 'Thursday',
+      'Fr': 'Friday',
+      'Sa': 'Saturday',
+      'Su': 'Sunday',
+    };
 
-  const handleWebsite = useCallback(() => {
-    if (venue?.website) {
-      // In a real app, you'd use Linking to open the website
-      console.log('Opening website:', venue.website);
-    }
-  }, [venue]);
+    const formatTime = (hour: string, minute: string) => {
+      const hourNum = parseInt(hour);
+      const ampm = hourNum >= 12 ? 'PM' : 'AM';
+      const displayHour = hourNum > 12 ? hourNum - 12 : hourNum === 0 ? 12 : hourNum;
+      return `${displayHour}:${minute} ${ampm}`;
+    };
+
+    const formatDayRange = (startDay: string, endDay: string) => {
+      const start = dayMap[startDay] || startDay;
+      const end = dayMap[endDay] || endDay;
+      return start === end ? start : `${start}-${end}`;
+    };
+
+    // Split by semicolon to handle multiple schedules
+    const schedules = hoursString.split(';').map(s => s.trim()).filter(s => s);
+    
+    return schedules.map(schedule => {
+      // Pattern: "Mo-Tu 07:00-23:00" or "We 07:00-24:00"
+      const match = schedule.match(/^([A-Za-z]{2})(?:-([A-Za-z]{2}))?\s+(\d{2}):(\d{2})-(\d{2}):(\d{2})$/);
+      
+      if (match) {
+        const startDay = match[1];
+        const endDay = match[2] || startDay; // If no end day, use start day
+        const startHour = match[3];
+        const startMinute = match[4];
+        const endHour = match[5];
+        const endMinute = match[6];
+        
+        const days = formatDayRange(startDay, endDay);
+        const startTime = formatTime(startHour, startMinute);
+        const endTime = formatTime(endHour, endMinute);
+        
+        return { days, hours: `${startTime} - ${endTime}` };
+      }
+      
+      // Fallback for unparseable formats
+      return { days: 'Hours', hours: schedule };
+    });
+  }, []);
 
   if (!venue) {
     return (
@@ -62,15 +163,19 @@ export default function VenueDetailsScreen() {
     <View style={styles.container}>
       <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.background} />
       
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Modern Header */}
+      <View style={styles.modernHeader}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-        <View style={styles.headerTitle}>
-          <Text style={styles.headerTitleText}>Venue Details</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerActionButton}>
+            <Ionicons name="share-outline" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerActionButton}>
+            <Ionicons name="heart-outline" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
-        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView 
@@ -78,34 +183,93 @@ export default function VenueDetailsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}
       >
-        {/* Hero Section */}
+        {/* Modern Hero Section */}
         <View style={styles.heroSection}>
-          <View style={styles.venueIconLarge}>
-            <Ionicons name="restaurant" size={48} color="#FFFFFF" />
-          </View>
-          <Text style={styles.venueName}>{venue.name}</Text>
-          <Text style={styles.venueCategory}>{venue.category}</Text>
-          
-          {/* Rating and Price */}
-          <View style={styles.venueStats}>
-            {venue.rating && venue.rating > 0 && (
-              <View style={styles.ratingBadge}>
-                <Ionicons name="star" size={16} color="#FFD700" />
-                <Text style={styles.ratingText}>{venue.rating}</Text>
+          <LinearGradient 
+            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)']} 
+            style={styles.heroGradient}
+          />
+          <View style={styles.heroContent}>
+            <View style={styles.venueIconContainer}>
+              <Ionicons name={venueService.getCategoryIcon(venue.category) as any} size={32} color="#FFFFFF" />
+            </View>
+            <Text style={styles.venueName}>{venue.name}</Text>
+            <Text style={styles.venueCategory}>{venue.category}</Text>
+            
+            {/* Modern Stats Row */}
+            <View style={styles.modernStats}>
+              {venue.rating && venue.rating > 0 && (
+                <View style={styles.statItem}>
+                  <Ionicons name="star" size={16} color="#FFD700" />
+                  <Text style={styles.statText}>{venue.rating.toFixed(1)}</Text>
+                </View>
+              )}
+              {venue.priceRange && venue.priceRange !== '' && (
+                <View style={styles.statItem}>
+                  <Ionicons name="cash-outline" size={16} color="#4CAF50" />
+                  <Text style={styles.statText}>
+                    {venue.priceRange === '1' ? '$' : 
+                     venue.priceRange === '2' ? '$$' : 
+                     venue.priceRange === '3' ? '$$$' : 
+                     venue.priceRange === '4' ? '$$$$' : venue.priceRange}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.statItem}>
+                <Ionicons name="location-outline" size={16} color="#87CEEB" />
+                <Text style={styles.statText}>{(venue.distance * 0.621371).toFixed(1)} mi</Text>
               </View>
-            )}
-            {venue.priceRange && venue.priceRange !== '' && (
-              <View style={styles.priceBadge}>
-                <Text style={styles.priceText}>
-                  {venue.priceRange === '1' ? '$' : 
-                   venue.priceRange === '2' ? '$$' : 
-                   venue.priceRange === '3' ? '$$$' : 
-                   venue.priceRange === '4' ? '$$$$' : venue.priceRange}
-                </Text>
-              </View>
-            )}
+            </View>
           </View>
         </View>
+
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.primaryAction} onPress={handleOpenMaps}>
+            <Ionicons name="navigate" size={20} color="#FFFFFF" />
+            <Text style={styles.primaryActionText}>Directions</Text>
+          </TouchableOpacity>
+          
+          {venue.phone && (
+            <TouchableOpacity style={styles.secondaryAction} onPress={handleCall}>
+              <Ionicons name="call" size={20} color="#4CAF50" />
+              <Text style={styles.secondaryActionText}>Call</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Social Media Links */}
+        {(venue.facebook || venue.twitter || venue.instagram) && (
+          <View style={styles.socialSection}>
+            <Text style={styles.socialTitle}>Follow Us</Text>
+            <View style={styles.socialLinks}>
+              {venue.facebook && (
+                <TouchableOpacity 
+                  style={styles.socialButton}
+                  onPress={() => handleOpenLink(venue.facebook!, 'Facebook')}
+                >
+                  <Ionicons name="logo-facebook" size={24} color="#1877F2" />
+                </TouchableOpacity>
+              )}
+              {venue.twitter && (
+                <TouchableOpacity 
+                  style={styles.socialButton}
+                  onPress={() => handleOpenLink(venue.twitter!, 'Twitter')}
+                >
+                  <Ionicons name="logo-twitter" size={24} color="#1DA1F2" />
+                </TouchableOpacity>
+              )}
+              {venue.instagram && (
+                <TouchableOpacity 
+                  style={styles.socialButton}
+                  onPress={() => handleOpenLink(venue.instagram!, 'Instagram')}
+                >
+                  <Ionicons name="logo-instagram" size={24} color="#E4405F" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Address Section */}
         <View style={styles.section}>
@@ -115,40 +279,136 @@ export default function VenueDetailsScreen() {
           </View>
           <View style={styles.addressCard}>
             <Text style={styles.addressText}>{venue.address}</Text>
-            <View style={styles.distanceInfo}>
-              <Ionicons name="navigate-outline" size={16} color="#87CEEB" />
+            <TouchableOpacity 
+              style={styles.distanceInfo}
+              onPress={handleOpenMaps}
+              accessibilityLabel="Open directions to venue"
+              accessibilityHint="Tap to open maps with directions to this venue"
+              accessibilityRole="button"
+            >
+              <Ionicons name="location-outline" size={16} color="#87CEEB" />
               <Text style={styles.distanceText}>
                 {(venue.distance * 0.621371).toFixed(1)} miles away
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Contact Section */}
+        {/* Contact Links Section */}
         {(venue.phone || venue.website) && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="call-outline" size={20} color="#87CEEB" />
-              <Text style={styles.sectionTitle}>Contact</Text>
+              <Ionicons name="link-outline" size={20} color="#87CEEB" />
+              <Text style={styles.sectionTitle}>Contact & Links</Text>
             </View>
-            <View style={styles.contactCard}>
+            <View style={styles.contactLinksCard}>
               {venue.phone && (
-                <TouchableOpacity style={styles.contactItem} onPress={handleCall}>
-                  <Ionicons name="call" size={20} color="#4CAF50" />
-                  <Text style={styles.contactText}>{venue.phone}</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#87CEEB" />
+                <TouchableOpacity 
+                  style={styles.contactLink}
+                  onPress={() => handleCall()}
+                  accessibilityLabel="Call venue"
+                  accessibilityHint="Tap to call this venue"
+                  accessibilityRole="button"
+                >
+                  <View style={styles.contactLinkIcon}>
+                    <Ionicons name="call" size={20} color="#4CAF50" />
+                  </View>
+                  <View style={styles.contactLinkContent}>
+                    <Text style={styles.contactLinkLabel}>Phone</Text>
+                    <Text style={styles.contactLinkValue}>{venue.phone}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="rgba(255, 255, 255, 0.5)" />
                 </TouchableOpacity>
               )}
+
               {venue.website && (
-                <TouchableOpacity style={styles.contactItem} onPress={handleWebsite}>
-                  <Ionicons name="globe" size={20} color="#2196F3" />
-                  <Text style={styles.contactText}>Visit Website</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#87CEEB" />
+                <TouchableOpacity 
+                  style={styles.contactLink}
+                  onPress={() => handleOpenLink(venue.website!, 'website')}
+                  accessibilityLabel="Visit website"
+                  accessibilityHint="Tap to open the venue's website"
+                  accessibilityRole="button"
+                >
+                  <View style={styles.contactLinkIcon}>
+                    <Ionicons name="globe" size={20} color="#2196F3" />
+                  </View>
+                  <View style={styles.contactLinkContent}>
+                    <Text style={styles.contactLinkLabel}>Website</Text>
+                    <Text style={styles.contactLinkValue} numberOfLines={1}>
+                      {venue.website.replace(/^https?:\/\//, '')}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="rgba(255, 255, 255, 0.5)" />
+                </TouchableOpacity>
+              )}
+
+              {venue.facebook && (
+                <TouchableOpacity 
+                  style={styles.contactLink}
+                  onPress={() => handleOpenLink(venue.facebook!, 'Facebook')}
+                  accessibilityLabel="Visit Facebook page"
+                  accessibilityHint="Tap to open the venue's Facebook page"
+                  accessibilityRole="button"
+                >
+                  <View style={styles.contactLinkIcon}>
+                    <Ionicons name="logo-facebook" size={20} color="#1877F2" />
+                  </View>
+                  <View style={styles.contactLinkContent}>
+                    <Text style={styles.contactLinkLabel}>Facebook</Text>
+                    <Text style={styles.contactLinkValue} numberOfLines={1}>
+                      {venue.facebook.replace(/^https?:\/\//, '')}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="rgba(255, 255, 255, 0.5)" />
+                </TouchableOpacity>
+              )}
+
+              {venue.twitter && (
+                <TouchableOpacity 
+                  style={styles.contactLink}
+                  onPress={() => handleOpenLink(venue.twitter!, 'Twitter')}
+                  accessibilityLabel="Visit Twitter page"
+                  accessibilityHint="Tap to open the venue's Twitter page"
+                  accessibilityRole="button"
+                >
+                  <View style={styles.contactLinkIcon}>
+                    <Ionicons name="logo-twitter" size={20} color="#1DA1F2" />
+                  </View>
+                  <View style={styles.contactLinkContent}>
+                    <Text style={styles.contactLinkLabel}>Twitter</Text>
+                    <Text style={styles.contactLinkValue} numberOfLines={1}>
+                      {venue.twitter.replace(/^https?:\/\//, '')}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="rgba(255, 255, 255, 0.5)" />
+                </TouchableOpacity>
+              )}
+
+              {venue.instagram && (
+                <TouchableOpacity 
+                  style={styles.contactLink}
+                  onPress={() => handleOpenLink(venue.instagram!, 'Instagram')}
+                  accessibilityLabel="Visit Instagram page"
+                  accessibilityHint="Tap to open the venue's Instagram page"
+                  accessibilityRole="button"
+                >
+                  <View style={styles.contactLinkIcon}>
+                    <Ionicons name="logo-instagram" size={20} color="#E4405F" />
+                  </View>
+                  <View style={styles.contactLinkContent}>
+                    <Text style={styles.contactLinkLabel}>Instagram</Text>
+                    <Text style={styles.contactLinkValue} numberOfLines={1}>
+                      {venue.instagram.replace(/^https?:\/\//, '')}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="rgba(255, 255, 255, 0.5)" />
                 </TouchableOpacity>
               )}
             </View>
           </View>
         )}
+
+
 
         {/* Hours Section */}
         {venue.hours && (
@@ -158,7 +418,24 @@ export default function VenueDetailsScreen() {
               <Text style={styles.sectionTitle}>Hours</Text>
             </View>
             <View style={styles.hoursCard}>
-              <Text style={styles.hoursText}>{venue.hours}</Text>
+              {formatHours(venue.hours).map((schedule, index, array) => (
+                <View 
+                  key={index} 
+                  style={[
+                    styles.hoursRow,
+                    index === array.length - 1 && styles.hoursRowLast
+                  ]}
+                >
+                  <View style={styles.hoursDayContainer}>
+                    <Ionicons name="calendar-outline" size={16} color="#87CEEB" />
+                    <Text style={styles.hoursDayText}>{schedule.days}</Text>
+                  </View>
+                  <View style={styles.hoursTimeContainer}>
+                    <Ionicons name="time-outline" size={16} color="#4CAF50" />
+                    <Text style={styles.hoursTimeText}>{schedule.hours}</Text>
+                  </View>
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -193,21 +470,55 @@ export default function VenueDetailsScreen() {
           </View>
         )}
 
-        {/* Action Buttons */}
-        <View style={styles.actionSection}>
-          <TouchableOpacity style={styles.primaryAction} onPress={handleNavigate}>
-            <Ionicons name="navigate" size={20} color="#FFFFFF" />
-            <Text style={styles.primaryActionText}>Get Directions</Text>
-          </TouchableOpacity>
-          
-          {venue.phone && (
-            <TouchableOpacity style={styles.secondaryAction} onPress={handleCall}>
-              <Ionicons name="call" size={20} color="#4CAF50" />
-              <Text style={styles.secondaryActionText}>Call Now</Text>
+        {/* Daily Deals Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="pricetag" size={20} color="#87CEEB" />
+            <Text style={styles.sectionTitle}>Daily Deals</Text>
+            <TouchableOpacity 
+              style={styles.addDealButton}
+              onPress={() => setShowAddDeal(true)}
+            >
+              <Ionicons name="add" size={20} color="#87CEEB" />
             </TouchableOpacity>
+          </View>
+          
+          {dealsLoading ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading deals...</Text>
+            </View>
+          ) : deals.length > 0 ? (
+            <View style={styles.dealsContainer}>
+              {deals.map((deal) => (
+                <View key={deal.id}>
+                  <DailyDealCard deal={deal} />
+                  {!deal.is_verified && (
+                    <View style={styles.unverifiedBadge}>
+                      <Text style={styles.unverifiedText}>Unverified</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyDealsContainer}>
+              <Ionicons name="pricetag-outline" size={48} color="rgba(255, 255, 255, 0.3)" />
+              <Text style={styles.emptyDealsText}>No deals yet</Text>
+              <Text style={styles.emptyDealsSubtext}>Be the first to share a deal!</Text>
+            </View>
           )}
         </View>
+
+
       </ScrollView>
+
+      <AddDealModal
+        visible={showAddDeal}
+        onClose={() => setShowAddDeal(false)}
+        venueId={venueId}
+        venueName={venue?.name || ''}
+        venueCategory={venue?.category}
+      />
     </View>
   );
 }
@@ -223,13 +534,28 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
   },
-  header: {
+  modernHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
+    zIndex: 10,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  headerActionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   backButton: {
     padding: 8,
@@ -280,9 +606,34 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   heroSection: {
+    position: 'relative',
     alignItems: 'center',
-    paddingVertical: 30,
+    paddingVertical: 60,
+    paddingHorizontal: 20,
     marginBottom: 20,
+  },
+  heroGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 24,
+  },
+  heroContent: {
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  venueIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(135, 206, 235, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(135, 206, 235, 0.4)',
   },
   venueIconLarge: {
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
@@ -314,6 +665,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
     textTransform: 'capitalize',
+  },
+  modernStats: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 16,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  statText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   venueStats: {
     flexDirection: 'row',
@@ -348,6 +720,86 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
     fontWeight: '600',
   },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  primaryAction: {
+    flex: 1,
+    backgroundColor: '#87CEEB',
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  primaryActionText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+  },
+  secondaryAction: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  secondaryActionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  socialSection: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  socialTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  socialLinks: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+  },
+  socialButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   section: {
     marginBottom: 24,
   },
@@ -379,10 +831,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    backgroundColor: 'rgba(135, 206, 235, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(135, 206, 235, 0.2)',
+    alignSelf: 'flex-start',
+    minHeight: 44,
   },
   distanceText: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#87CEEB',
+    fontWeight: '600',
   },
   contactCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -390,6 +851,61 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  contactLinksCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  contactLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    minHeight: 60,
+  },
+  contactLinkIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  contactLinkContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  contactLinkLabel: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  contactLinkValue: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    marginTop: 2,
   },
   contactItem: {
     flexDirection: 'row',
@@ -403,16 +919,55 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   hoursCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  hoursText: {
-    fontSize: 16,
+  hoursRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  hoursDayContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+    marginRight: 20,
+  },
+  hoursDayText: {
+    fontSize: 15,
     color: '#FFFFFF',
-    lineHeight: 24,
+    fontWeight: '600',
+  },
+  hoursTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 120,
+    justifyContent: 'flex-end',
+  },
+  hoursTimeText: {
+    fontSize: 15,
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  hoursRowLast: {
+    borderBottomWidth: 0,
   },
   descriptionCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -444,48 +999,55 @@ const styles = StyleSheet.create({
     color: '#87CEEB',
     fontWeight: '500',
   },
-  actionSection: {
-    marginTop: 20,
+
+  addDealButton: {
+    padding: 8,
+    backgroundColor: 'rgba(135, 206, 235, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(135, 206, 235, 0.3)',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  dealsContainer: {
     gap: 12,
   },
-  primaryAction: {
-    backgroundColor: '#87CEEB',
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
+  emptyDealsContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  primaryActionText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a1a2e',
-  },
-  secondaryAction: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  secondaryActionText: {
+  emptyDealsText: {
     fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  emptyDealsSubtext: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.4)',
+    textAlign: 'center',
+  },
+  unverifiedBadge: {
+    backgroundColor: 'rgba(255, 193, 7, 0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  unverifiedText: {
+    fontSize: 12,
+    color: '#FFD700',
     fontWeight: '600',
-    color: '#4CAF50',
   },
 }); 
