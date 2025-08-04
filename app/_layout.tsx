@@ -66,6 +66,7 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === "(auth)";
     const inTabsGroup = segments[0] === "(tabs)";
+    const isVenueDetails = segments[0] === "venue-details";
 
     if (!user && !inAuthGroup) {
       console.log('Navigating to sign-in');
@@ -73,8 +74,8 @@ function RootLayoutNav() {
     } else if (user && inAuthGroup) {
       console.log('Navigating to tabs');
       router.replace("/(tabs)");
-    } else if (user && !inTabsGroup && !inAuthGroup) {
-      console.log('User signed in but not in tabs, navigating to tabs');
+    } else if (user && !inTabsGroup && !inAuthGroup && !isVenueDetails) {
+      console.log('User signed in but not in tabs or venue-details, navigating to tabs');
       router.replace("/(tabs)");
     } else {
       console.log('Navigation state is correct, no action needed');
@@ -109,6 +110,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="(auth)" />
+      <Stack.Screen name="venue-details" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ headerShown: false }} />
     </Stack>
   );

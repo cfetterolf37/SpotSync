@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { FilterModal } from '../../components';
@@ -10,6 +11,7 @@ import { useWeather } from '../../contexts/WeatherContext';
 const { width } = Dimensions.get('window');
 
 const HomeScreen = React.memo(() => {
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { weather, loading: weatherLoading, error: weatherError } = useWeather();
   const { venues, loading: venueLoading, error: venueError, searchVenues } = useVenues();
@@ -22,13 +24,17 @@ const HomeScreen = React.memo(() => {
   const handleApplyFilters = useCallback(async (filters: { category: string; radius: number }) => {
     setActiveFilters(filters);
     console.log('Applying filters:', filters);
-    
-    // Call the venue context's searchVenues function with the new filters
+
     await searchVenues({
       category: filters.category || undefined,
       radius: filters.radius,
     });
   }, [searchVenues]);
+
+  const handleVenuePress = useCallback((venueId: string) => {
+    console.log('Venue card tapped, navigating to:', `/venue-details?venueId=${venueId}`);
+    router.push(`/venue-details?venueId=${venueId}`);
+  }, [router]);
 
   const getFilterIndicatorText = useCallback(() => {
     const indicators = [];
@@ -41,8 +47,8 @@ const HomeScreen = React.memo(() => {
     return indicators.join(', ');
   }, [activeFilters]);
 
-  const hasActiveFilters = useMemo(() => 
-    activeFilters.category || activeFilters.radius !== 5, 
+  const hasActiveFilters = useMemo(() =>
+    activeFilters.category || activeFilters.radius !== 5,
     [activeFilters]
   );
 
@@ -53,56 +59,38 @@ const HomeScreen = React.memo(() => {
     if (desc.includes('rain')) return 'rainy';
     if (desc.includes('snow')) return 'snow';
     if (desc.includes('thunder')) return 'thunderstorm';
+    if (desc.includes('fog') || desc.includes('mist')) return 'water';
     return 'partly-sunny';
   }, []);
 
   const getWeatherColor = useCallback((description: string) => {
-    const weatherColors: { [key: string]: string } = {
-      'clear sky': '#FFD700',
-      'few clouds': '#87CEEB',
-      'scattered clouds': '#87CEEB',
-      'broken clouds': '#87CEEB',
-      'shower rain': '#4682B4',
-      'rain': '#4169E1',
-      'thunderstorm': '#483D8B',
-      'snow': '#F0F8FF',
-      'mist': '#E6E6FA',
-      'fog': '#D3D3D3',
-    };
-    return weatherColors[description.toLowerCase()] || '#87CEEB';
+    const desc = description.toLowerCase();
+    if (desc.includes('clear')) return '#FFD700';
+    if (desc.includes('cloud')) return '#87CEEB';
+    if (desc.includes('rain')) return '#4682B4';
+    if (desc.includes('snow')) return '#F0F8FF';
+    if (desc.includes('thunder')) return '#483D8B';
+    if (desc.includes('fog') || desc.includes('mist')) return '#B0C4DE';
+    return '#87CEEB';
   }, []);
 
   const getWeatherGradient = useCallback((description: string): [string, string] => {
     const desc = description.toLowerCase();
-    
-    if (desc.includes('clear') || desc.includes('sun')) {
-      return ['#FFD700', '#FFA500']; // Golden to Orange for sunny
-    }
-    if (desc.includes('cloud')) {
-      return ['#87CEEB', '#B0C4DE']; // Sky Blue to Light Steel Blue for cloudy
-    }
-    if (desc.includes('rain') || desc.includes('shower')) {
-      return ['#4682B4', '#5F9EA0']; // Steel Blue to Cadet Blue for rain
-    }
-    if (desc.includes('snow')) {
-      return ['#F0F8FF', '#E6E6FA']; // Alice Blue to Lavender for snow
-    }
-    if (desc.includes('thunder')) {
-      return ['#483D8B', '#2F4F4F']; // Dark Slate Blue to Dark Slate Gray for storms
-    }
-    if (desc.includes('fog') || desc.includes('mist')) {
-      return ['#D3D3D3', '#C0C0C0']; // Light Gray to Silver for fog
-    }
-    // Default gradient for unknown weather
-    return ['#87CEEB', '#B0C4DE'];
+    if (desc.includes('clear')) return ['#FFD700', '#FFA500'];
+    if (desc.includes('cloud')) return ['#87CEEB', '#4682B4'];
+    if (desc.includes('rain')) return ['#4682B4', '#2F4F4F'];
+    if (desc.includes('snow')) return ['#F0F8FF', '#B0C4DE'];
+    if (desc.includes('thunder')) return ['#483D8B', '#2F4F4F'];
+    if (desc.includes('fog') || desc.includes('mist')) return ['#B0C4DE', '#696969'];
+    return ['#87CEEB', '#4682B4'];
   }, []);
 
   const renderHeader = useCallback(() => (
     <View style={styles.header}>
       <View style={styles.headerContent}>
         <View style={styles.logoContainer}>
-          <Image 
-            source={require('../../assets/images/SpotSyncLogo.png')} 
+          <Image
+            source={require('../../assets/images/SpotSyncLogo.png')}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -116,7 +104,7 @@ const HomeScreen = React.memo(() => {
             </View>
           )}
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.filterButton}
           onPress={() => setShowFilters(true)}
           accessibilityLabel="Open filters"
@@ -172,7 +160,7 @@ const HomeScreen = React.memo(() => {
 
     if (weather) {
       const gradientColors = getWeatherGradient(weather.description);
-      
+
       return (
         <LinearGradient
           colors={gradientColors}
@@ -187,14 +175,14 @@ const HomeScreen = React.memo(() => {
                 <Text style={styles.temperatureC}>{weather.temperatureCelsius}°C</Text>
               </View>
               <View style={styles.weatherIconContainer}>
-                <Ionicons 
-                  name={getWeatherIcon(weather.description)} 
-                  size={32} 
-                  color={getWeatherColor(weather.description)} 
+                <Ionicons
+                  name={getWeatherIcon(weather.description)}
+                  size={32}
+                  color={getWeatherColor(weather.description)}
                 />
               </View>
             </View>
-            
+
             <View style={styles.weatherSecondary}>
               <Text style={styles.weatherDescription}>{weather.description}</Text>
               <View style={styles.weatherStats}>
@@ -286,64 +274,80 @@ const HomeScreen = React.memo(() => {
           </View>
         ) : (
           <View style={styles.venuesList}>
-            {venues.slice(0, 10).map((venue, index) => {
-              console.log('Venue card data:', {
-                name: venue.name,
-                rating: venue.rating,
-                priceRange: venue.priceRange,
-                distance: venue.distance
-              });
-              
+                                    {venues.slice(0, 10).map((venue, index) => {
+                          console.log('Rendering venue card:', venue.id, venue.name);
+                          console.log('Venue card data:', {
+                            name: venue.name,
+                            rating: venue.rating,
+                            priceRange: venue.priceRange,
+                            distance: venue.distance
+                          });
+
               return (
-                <TouchableOpacity 
-                  key={venue.id} 
+                <TouchableOpacity
+                  key={venue.id}
                   style={styles.venueCard}
                   accessibilityLabel={`${venue.name}, ${venue.category}`}
                   accessibilityHint={`Tap to view details for ${venue.name}`}
                   accessibilityRole="button"
+                  onPress={() => handleVenuePress(venue.id)}
                 >
-                  <View style={styles.venueHeader}>
-                    <View style={styles.venueIconContainer}>
-                      <Ionicons 
-                        name="restaurant" 
-                        size={20} 
-                        color="#FFFFFF" 
-                      />
+                  <View style={styles.venueCardHeader}>
+                    <View style={styles.venueMainInfo}>
+                      <View style={styles.venueIconContainer}>
+                        <Ionicons
+                          name="restaurant"
+                          size={24}
+                          color="#FFFFFF"
+                        />
+                      </View>
+                      <View style={styles.venueTitleSection}>
+                        <Text style={styles.venueName} numberOfLines={1}>
+                          {venue.name}
+                        </Text>
+                        <Text style={styles.venueCategory} numberOfLines={1}>
+                          {venue.category}
+                        </Text>
+                      </View>
                     </View>
                     <View style={styles.venueStats}>
                       {venue.rating && venue.rating > 0 && (
                         <View style={styles.venueRating}>
-                          <View style={styles.ratingContainer}>
-                            <Ionicons name="star" size={12} color="#FFD700" />
-                            <Text style={styles.ratingText}>{venue.rating}</Text>
-                          </View>
+                          <Ionicons name="star" size={14} color="#FFD700" />
+                          <Text style={styles.ratingText}>{venue.rating}</Text>
                         </View>
                       )}
                       {venue.priceRange && venue.priceRange !== '' && (
                         <View style={styles.priceContainer}>
                           <Text style={styles.priceText}>
-                            {venue.priceRange === '1' ? '$' : 
-                             venue.priceRange === '2' ? '$$' : 
-                             venue.priceRange === '3' ? '$$$' : 
+                            {venue.priceRange === '1' ? '$' :
+                             venue.priceRange === '2' ? '$$' :
+                             venue.priceRange === '3' ? '$$$' :
                              venue.priceRange === '4' ? '$$$$' : venue.priceRange}
                           </Text>
                         </View>
                       )}
                     </View>
                   </View>
-                  
-                  <Text style={styles.venueName}>{venue.name}</Text>
-                  <Text style={styles.venueAddress}>{venue.address}</Text>
-                  
-                  <View style={styles.venueFooter}>
+
+                  <Text style={styles.venueAddress} numberOfLines={2}>
+                    {venue.address}
+                  </Text>
+
+                  <View style={styles.venueCardFooter}>
                     <View style={styles.distanceContainer}>
-                      <Ionicons name="location-outline" size={12} color="#FFFFFF" />
+                      <Ionicons name="location-outline" size={14} color="#87CEEB" />
                       <Text style={styles.distanceText}>
                         {(venue.distance * 0.621371).toFixed(1)} mi away
                       </Text>
                     </View>
-                    <View style={styles.categoryContainer}>
-                      <Text style={styles.categoryText}>{venue.category}</Text>
+                    <View style={styles.venueActions}>
+                      <TouchableOpacity style={styles.actionButton}>
+                        <Ionicons name="call-outline" size={16} color="#87CEEB" />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.actionButton}>
+                        <Ionicons name="navigate-outline" size={16} color="#87CEEB" />
+                      </TouchableOpacity>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -362,10 +366,10 @@ const HomeScreen = React.memo(() => {
         colors={['#1a1a2e', '#16213e', '#0f3460']}
         style={styles.background}
       />
-      
+
       {/* Content */}
-      <ScrollView 
-        style={styles.content} 
+      <ScrollView
+        style={styles.content}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}
       >
@@ -608,34 +612,67 @@ const styles = StyleSheet.create({
     // No specific styles for the list container, as it's a View
   },
   venueCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 8,
     },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 12,
     position: 'relative',
     overflow: 'hidden',
   },
-  venueHeader: {
+  venueCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  venueMainInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
   },
   venueIconContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    padding: 8,
-    marginRight: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 16,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  venueTitleSection: {
+    flex: 1,
+  },
+  venueName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  venueCategory: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textTransform: 'capitalize',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 1,
   },
   venueStats: {
     flexDirection: 'row',
@@ -643,85 +680,72 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   venueRating: {
-    backgroundColor: 'rgba(255, 193, 7, 0.2)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 193, 7, 0.3)',
-  },
-  ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 193, 7, 0.25)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 193, 7, 0.4)',
+    gap: 4,
   },
   ratingText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#FFD700',
     fontWeight: '600',
-    marginLeft: 4,
   },
   priceContainer: {
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(76, 175, 80, 0.25)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: 'rgba(76, 175, 80, 0.3)',
+    borderColor: 'rgba(76, 175, 80, 0.4)',
   },
   priceText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#4CAF50',
     fontWeight: '600',
   },
-  venueName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 6,
-    flex: 1,
+  venueAddress: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 16,
+    lineHeight: 22,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 1,
   },
-  venueAddress: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  venueFooter: {
+  venueCardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
   },
   distanceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
   },
   distanceText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#FFFFFF',
     fontWeight: '500',
-    marginLeft: 4,
   },
-  categoryContainer: {
-    backgroundColor: 'rgba(100, 149, 237, 0.2)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  venueActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
-    borderColor: 'rgba(100, 149, 237, 0.3)',
-  },
-  categoryText: {
-    fontSize: 12,
-    color: '#6495ED',
-    fontWeight: '600',
-    textTransform: 'capitalize',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   sectionHeader: {
     flexDirection: 'row',

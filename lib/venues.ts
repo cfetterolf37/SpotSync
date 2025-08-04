@@ -199,41 +199,18 @@ class VenueService {
     );
 
     // Safely handle categories with multiple fallbacks
-    let categoryArray: string[] = [];
-    let primaryCategory = 'venue';
-    
-    if (properties.categories && typeof properties.categories === 'string') {
-      categoryArray = properties.categories.split(',').map((cat: string) => cat.trim());
-      primaryCategory = categoryArray.length > 0 ? categoryArray[0] : 'venue';
-    }
-
-    // Try multiple possible rating fields
-    let rating = properties.rating || properties.stars || properties.rating_value;
-    
-    // Try multiple possible price range fields
-    let priceRange = properties.price || properties.price_range || properties.price_level;
-    
-    // Convert price level numbers to strings if needed
-    if (typeof priceRange === 'number') {
-      priceRange = priceRange.toString();
-    }
+    let categoryArray: string[] = properties.categories;
 
     return {
       id: properties.place_id || `venue-${Date.now()}`,
       name: properties.name || 'Unknown Venue',
       address: properties.formatted || properties.address_line1 || '',
-      category: primaryCategory,
-      rating: rating,
-      priceRange: priceRange,
+      category: categoryArray[0] || 'venue',
       distance,
       coordinates: {
         latitude: geometry.coordinates[1],
         longitude: geometry.coordinates[0],
       },
-      hours: properties.opening_hours,
-      phone: properties.phone,
-      website: properties.website,
-      description: properties.description,
       tags: categoryArray,
     };
   }
@@ -289,6 +266,7 @@ class VenueService {
   }
 
   private mergeVenueDetails(venue: Venue, details: any): Venue {
+    console.log('VenueService: Merging venue details for', venue.name, details);
     return {
       ...venue,
       rating: details.rating || venue.rating,
